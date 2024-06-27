@@ -41,7 +41,14 @@ nt3
 无环境依赖，理论上适配所有系统和主流架构，更多架构请查看 https://github.com/oneclickvirt/nt3/releases/tag/output
 
 ```
-
+Usage of nt3:
+  -c string
+        Specify check type (both, ipv4, or ipv6) (default "ipv4")
+  -l string
+        Specify language parameter (en or zh) (default "zh")
+  -loc string
+        Specify location (supports GZ, BJ, SH, CD; corresponding to Guangzhou, Beijing, Shanghai, Chengdu) (default "GZ")
+  -v    Show version information
 ```
 
 ## 在Golang中使用
