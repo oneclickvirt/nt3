@@ -18,9 +18,9 @@ func main() {
 	var showVersion bool
 	var language, checkType, location string
 	flag.BoolVar(&showVersion, "v", false, "Show version information")
-	flag.StringVar(&language, "l", "", "Specify language parameter (en or zh, default is zh)")
-	flag.StringVar(&checkType, "c", "", "Specify check type (both, ipv4, or ipv6, default is ipv4)")
-	flag.StringVar(&location, "loc", "", "Specify location (supports GZ, BJ, SH, CD; corresponding to Guangzhou, Beijing, Shanghai, Chengdu)")
+	flag.StringVar(&language, "l", "zh", "Specify language parameter (en or zh)")
+	flag.StringVar(&checkType, "c", "ipv4", "Specify check type (both, ipv4, or ipv6)")
+	flag.StringVar(&location, "loc", "GZ", "Specify location (supports GZ, BJ, SH, CD; corresponding to Guangzhou, Beijing, Shanghai, Chengdu)")
 	// flag.BoolVar(&model.EnableLoger, "log", false, "Enable logging")
 	flag.Parse()
 	if showVersion {
