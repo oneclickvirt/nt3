@@ -51,6 +51,12 @@ Usage of nt3:
   -v    Show version information
 ```
 
+![图片](https://github.com/oneclickvirt/nt3/assets/103393591/e287cfde-3a22-4532-972e-31da95241df0)
+
+![图片](https://github.com/oneclickvirt/nt3/assets/103393591/1f0ab6be-7900-438c-98a4-c338fd515933)
+
+![图片](https://github.com/oneclickvirt/nt3/assets/103393591/0484fadd-6887-4db4-afb9-e32e7f382463)
+
 ## 在Golang中使用
 
 ```
