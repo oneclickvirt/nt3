@@ -57,6 +57,13 @@ Usage of nt3:
 
 ![图片](https://github.com/oneclickvirt/nt3/assets/103393591/0484fadd-6887-4db4-afb9-e32e7f382463)
 
+## 卸载
+
+```
+rm -rf /root/nt3
+rm -rf /usr/bin/nt3
+```
+
 ## 在Golang中使用
 
 ```
