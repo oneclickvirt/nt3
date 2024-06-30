@@ -3,11 +3,12 @@ module github.com/oneclickvirt/nt3
 go 1.22.4
 
 require (
-	github.com/fatih/color v1.17.0
 	github.com/nxtrace/NTrace-core v1.3.1
+	github.com/oneclickvirt/defaultset v0.0.2-20240624082446
 )
 
 require (
+	github.com/fatih/color v1.17.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
@@ -33,6 +34,7 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tsosunchia/powclient v0.1.5 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect

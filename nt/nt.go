@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	fastTrace "github.com/nxtrace/NTrace-core/fast_trace"
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/util"
 	"github.com/nxtrace/NTrace-core/wshandle"
+	. "github.com/oneclickvirt/defaultset"
 	"github.com/oneclickvirt/nt3/model"
 )
 
@@ -42,21 +42,19 @@ func realtimePrinter(res *trace.Result, ttl int) {
 		tmpMap[v.Address.String()] = append(tmpMap[v.Address.String()], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 	}
 	if latestIP == "" {
-		fmt.Fprintf(color.Output, "%s\n",
-			color.New(color.FgWhite, color.Bold).Sprintf("*"),
-		)
+		fmt.Printf(White("*") + "\n")
 		return
 	}
 	for ip, v := range tmpMap {
 		i, _ := strconv.Atoi(v[0])
 		rtt := v[1]
 		// 打印RTT
-		fmt.Fprintf(color.Output, fmt.Sprintf("%-24s ", color.New(color.FgHiCyan, color.Bold).Sprintf("%s", rtt)))
+		fmt.Printf(Cyan("%-24s "), rtt)
 		// 打印AS号
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
-			fmt.Fprintf(color.Output, fmt.Sprintf("%-24s ", color.New(color.FgHiYellow, color.Bold).Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber)))
+			fmt.Printf(Yellow("%-24s "), fmt.Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber))
 		} else {
-			fmt.Fprintf(color.Output, fmt.Sprintf("%-24s ", color.New(color.FgWhite, color.Bold).Sprintf("*")))
+			fmt.Printf(White("%-24s "), "*")
 		}
 		// 打印地理信息
 		if net.ParseIP(ip).To4() != nil {
@@ -94,9 +92,9 @@ func realtimePrinter(res *trace.Result, ttl int) {
 			case whoisFormat[0] == "[CMIN2-NET]":
 				fallthrough
 			case strings.HasPrefix(res.Hops[ttl][i].Address.String(), "59.43."):
-				fmt.Fprintf(color.Output, "%s", color.New(color.FgHiYellow, color.Bold).Sprintf("%-18s", whoisFormat[0]))
+				fmt.Printf(Yellow("%s "), fmt.Sprintf("%-18s", whoisFormat[0]))
 			default:
-				fmt.Fprintf(color.Output, "%s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-18s", whoisFormat[0]))
+				fmt.Printf(Green("%s "), fmt.Sprintf("%-18s", whoisFormat[0]))
 			}
 			var parts []string
 			country := res.Hops[ttl][i].Geo.Country
@@ -104,19 +102,19 @@ func realtimePrinter(res *trace.Result, ttl int) {
 			city := res.Hops[ttl][i].Geo.City
 			owner := res.Hops[ttl][i].Geo.Owner
 			if country != "" {
-				parts = append(parts, color.New(color.FgWhite, color.Bold).Sprintf("%s", country))
+				parts = append(parts, White(country))
 			}
 			if prov != "" {
-				parts = append(parts, color.New(color.FgWhite, color.Bold).Sprintf("%s", prov))
+				parts = append(parts, White(prov))
 			}
 			if city != "" {
-				parts = append(parts, color.New(color.FgWhite, color.Bold).Sprintf("%s", city))
+				parts = append(parts, White(city))
 			}
 			if owner != "" {
-				parts = append(parts, color.New(color.FgWhite, color.Bold).Sprintf("%s", owner))
+				parts = append(parts, White(owner))
 			}
 			if len(parts) > 0 {
-				fmt.Fprintf(color.Output, strings.Join(parts, ", "))
+				fmt.Printf(strings.Join(parts, ", "))
 			}
 		}
 		fmt.Println()
@@ -231,15 +229,15 @@ func TraceRoute(language, location, testType string) {
 	if TL != nil {
 		for _, T := range TL {
 			if testType == "both" {
-				fmt.Fprintf(color.Output, "%s - ", color.New(color.FgHiBlue, color.Bold).Sprintf("%s - ICMP v4", T.ISPName))
+				fmt.Printf(Blue("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
 				tracert(ft, T)
-				fmt.Fprintf(color.Output, "%s - ", color.New(color.FgHiBlue, color.Bold).Sprintf("%s - ICMP v6", T.ISPName))
+				fmt.Printf(Blue("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
 				tracert_v6(ft, T)
 			} else if testType == "ipv4" {
-				fmt.Fprintf(color.Output, "%s - ", color.New(color.FgHiBlue, color.Bold).Sprintf("%s - ICMP v4", T.ISPName))
+				fmt.Printf(Blue("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
 				tracert(ft, T)
 			} else if testType == "ipv6" {
-				fmt.Fprintf(color.Output, "%s - ", color.New(color.FgHiBlue, color.Bold).Sprintf("%s - ICMP v6", T.ISPName))
+				fmt.Printf(Blue("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
 				tracert_v6(ft, T)
 			}
 			time.Sleep(500 * time.Millisecond)
