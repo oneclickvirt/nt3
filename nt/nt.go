@@ -229,15 +229,15 @@ func TraceRoute(language, location, testType string) {
 	if TL != nil {
 		for _, T := range TL {
 			if testType == "both" {
-				fmt.Printf(Blue("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
+				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
 				tracert(ft, T)
-				fmt.Printf(Blue("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
+				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
 				tracert_v6(ft, T)
 			} else if testType == "ipv4" {
-				fmt.Printf(Blue("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
+				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
 				tracert(ft, T)
 			} else if testType == "ipv6" {
-				fmt.Printf(Blue("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
+				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
 				tracert_v6(ft, T)
 			}
 			time.Sleep(500 * time.Millisecond)
