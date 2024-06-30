@@ -52,9 +52,9 @@ func realtimePrinter(res *trace.Result, ttl int) {
 		fmt.Printf(Cyan("%-12s "), rtt)
 		// 打印AS号
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
-			fmt.Printf(Yellow("%-12s "), fmt.Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber))
+			fmt.Printf(Yellow("%-10s "), fmt.Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber))
 		} else {
-			fmt.Printf(White("%-12s "), "*")
+			fmt.Printf(White("%-10s "), "*")
 		}
 		// 打印地理信息
 		if net.ParseIP(ip).To4() != nil {
