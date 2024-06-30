@@ -242,6 +242,7 @@ func TraceRoute(language, location, testType string) {
 				fmt.Fprintf(color.Output, "%s - ", color.New(color.FgHiBlue, color.Bold).Sprintf("%s - ICMP v6", T.ISPName))
 				tracert_v6(ft, T)
 			}
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
 }
