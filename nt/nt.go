@@ -49,12 +49,12 @@ func realtimePrinter(res *trace.Result, ttl int) {
 		i, _ := strconv.Atoi(v[0])
 		rtt := v[1]
 		// 打印RTT
-		fmt.Printf(Cyan("%-24s "), rtt)
+		fmt.Printf(Cyan("%-12s "), rtt)
 		// 打印AS号
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
-			fmt.Printf(Yellow("%-24s "), fmt.Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber))
+			fmt.Printf(Yellow("%-12s "), fmt.Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber))
 		} else {
-			fmt.Printf(White("%-24s "), "*")
+			fmt.Printf(White("%-12s "), "*")
 		}
 		// 打印地理信息
 		if net.ParseIP(ip).To4() != nil {
