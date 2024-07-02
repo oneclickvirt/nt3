@@ -20,8 +20,9 @@ type ParamsFastTrace struct {
 	DontFragment   bool
 }
 
-// var EnableLoger bool
-var NextTraceVersion = "v0.0.2"
+var NextTraceVersion = "v0.0.3"
+
+var EnableLoger = false
 
 var (
 	GuangZhouCT = fastTrace.ISPCollection{

@@ -149,8 +149,10 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 	//conf.RealtimePrinter = printer.RealtimePrinter
 	//conf.RealtimePrinter = tracelog.RealtimePrinter
 	_, err = trace.Traceroute(f.TracerouteMethod, conf)
-	if err != nil {
-		log.Fatal(err)
+	if err != nil && model.EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+		Logger.Info("trace failed: " + err.Error())
 	}
 }
 
@@ -182,8 +184,10 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 	//conf.RealtimePrinter = printer.RealtimePrinter
 	//conf.RealtimePrinter = tracelog.RealtimePrinter
 	_, err = trace.Traceroute(f.TracerouteMethod, conf)
-	if err != nil {
-		log.Fatal(err)
+	if err != nil && model.EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+		Logger.Info("trace failed: " + err.Error())
 	}
 }
 
