@@ -16,7 +16,7 @@
 
 ## 使用
 
-下载及安装
+下载、安装、更新
 
 ```
 curl https://raw.githubusercontent.com/oneclickvirt/nt3/main/nt3_install.sh -sSf | bash
@@ -45,13 +45,16 @@ nt3
 无环境依赖，理论上适配所有系统和主流架构，更多架构请查看 https://github.com/oneclickvirt/nt3/releases/tag/output
 
 ```
-Usage of nt3:
+Usage: nt3 [options]
   -c string
         Specify check type (both, ipv4, or ipv6) (default "ipv4")
+  -h    Show help information
   -l string
         Specify language parameter (en or zh) (default "zh")
   -loc string
         Specify location (supports GZ, BJ, SH, CD; corresponding to Guangzhou, Beijing, Shanghai, Chengdu) (default "GZ")
+  -log
+        Enable logging
   -v    Show version information
 ```
 
