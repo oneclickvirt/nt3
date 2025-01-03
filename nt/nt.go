@@ -41,8 +41,7 @@ func realtimePrinter(res *trace.Result, ttl int) {
 		tmpMap[v.Address.String()] = append(tmpMap[v.Address.String()], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 	}
 	if latestIP == "" {
-		fmt.Printf(White("*") + "
-")
+		fmt.Printf(White("*") + "\n")
 		time.Sleep(3 * time.Second) // Wait 3 seconds before retry
 		return
 	}
