@@ -2,8 +2,6 @@ module github.com/oneclickvirt/nt3
 
 go 1.22.10
 
-toolchain go1.23.4
-
 require (
 	github.com/nxtrace/NTrace-core v1.3.6
 	github.com/oneclickvirt/defaultset v0.0.2-20240624082446
