@@ -19,13 +19,8 @@ import (
 	"github.com/oneclickvirt/nt3/model"
 )
 
-// RetryConfig 定义重试配置
-type RetryConfig struct {
-	MaxRetries int
-	RetryDelay time.Duration
-}
-
 func realtimePrinter(res *trace.Result, ttl int) {
+	//fmt.Printf("%s  ", color.New(color.FgHiYellow, color.Bold).Sprintf("%-2d", ttl+1))
 	var latestIP string
 	tmpMap := make(map[string][]string)
 	for i, v := range res.Hops[ttl] {
@@ -53,18 +48,22 @@ func realtimePrinter(res *trace.Result, ttl int) {
 	for ip, v := range tmpMap {
 		i, _ := strconv.Atoi(v[0])
 		rtt := v[1]
+		// 打印RTT
 		fmt.Printf(Cyan("%-12s "), rtt)
+		// 打印AS号
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
 			fmt.Printf(Yellow("%-10s "), fmt.Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber))
 		} else {
 			fmt.Printf(White("%-10s "), "*")
 		}
+		// 打印地理信息
 		if net.ParseIP(ip).To4() != nil {
 			whoisFormat := strings.Split(res.Hops[ttl][i].Geo.Whois, "-")
 			if len(whoisFormat) > 1 {
 				whoisFormat[0] = strings.Join(whoisFormat[:2], "-")
 			}
 			if whoisFormat[0] != "" {
+				//如果以RFC或DOD开头那么为空
 				if !(strings.HasPrefix(whoisFormat[0], "RFC") ||
 					strings.HasPrefix(whoisFormat[0], "DOD")) {
 					whoisFormat[0] = "[" + whoisFormat[0] + "]"
@@ -72,6 +71,7 @@ func realtimePrinter(res *trace.Result, ttl int) {
 					whoisFormat[0] = ""
 				}
 			}
+			// CMIN2, CUII, CN2, CUG 改为壕金色高亮
 			switch {
 			case res.Hops[ttl][i].Geo.Asnumber == "58807":
 				fallthrough
@@ -121,96 +121,94 @@ func realtimePrinter(res *trace.Result, ttl int) {
 	}
 }
 
-// performTrace 执行单次追踪并返回是否成功
-func performTrace(ft fastTrace.FastTracer, isp fastTrace.ISPCollection, isIPv6 bool) (bool, error) {
-	var destIP net.IP
-	var err error
-	if isIPv6 {
-		fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", isp.ISPName))
-		destIP, err = util.DomainLookUp(isp.IPv6, "6", "", true)
-	} else {
-		fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", isp.ISPName))
-		destIP, err = util.DomainLookUp(isp.IP, "4", "", true)
-	}
+func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
+	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+	ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	if err != nil {
-		if model.EnableLoger {
-			log.Printf("DNS解析失败: %v", err)
-		}
-		return false, err
+		log.Fatal(err)
 	}
 	var conf = trace.Config{
 		BeginHop:         1,
-		DestIP:           destIP,
+		DestIP:           ip,
 		DestPort:         80,
 		MaxHops:          30,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             ft.ParamsFastTrace.RDns,
-		AlwaysWaitRDNS:   ft.ParamsFastTrace.AlwaysWaitRDNS,
+		RDns:             f.ParamsFastTrace.RDns,
+		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
 		PacketInterval:   50,
 		TTLInterval:      50,
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
 		Timeout:          time.Duration(1000) * time.Millisecond,
-		SrcAddr:          ft.ParamsFastTrace.SrcAddr,
+		SrcAddr:          f.ParamsFastTrace.SrcAddr,
 		PktSize:          52,
-		Lang:             ft.ParamsFastTrace.Lang,
-		DontFragment:     ft.ParamsFastTrace.DontFragment,
+		Lang:             f.ParamsFastTrace.Lang,
+		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
 	conf.RealtimePrinter = realtimePrinter
-	result, err := trace.Traceroute(ft.TracerouteMethod, conf)
+	//conf.RealtimePrinter = printer.RealtimePrinter
+	//conf.RealtimePrinter = tracelog.RealtimePrinter
+	_, err = trace.Traceroute(f.TracerouteMethod, conf)
+	if err != nil && model.EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+		Logger.Info("trace failed: " + err.Error())
+	}
+}
+
+func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
+	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	if err != nil {
-		if model.EnableLoger {
-			log.Printf("追踪失败: %v", err)
-		}
-		return false, err
+		log.Fatal(err)
 	}
-	// 检查结果是否为空
-	if result == nil || len(result.Hops) == 0 {
-		return false, fmt.Errorf("追踪结果为空")
+	var conf = trace.Config{
+		BeginHop:         1,
+		DestIP:           ip,
+		DestPort:         80,
+		MaxHops:          30,
+		NumMeasurements:  3,
+		ParallelRequests: 18,
+		RDns:             f.ParamsFastTrace.RDns,
+		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
+		PacketInterval:   50,
+		TTLInterval:      50,
+		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
+		Timeout:          time.Duration(1000) * time.Millisecond,
+		SrcAddr:          f.ParamsFastTrace.SrcAddr,
+		PktSize:          52,
+		Lang:             f.ParamsFastTrace.Lang,
+		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
-	return true, nil
+	conf.RealtimePrinter = realtimePrinter
+	//conf.RealtimePrinter = printer.RealtimePrinter
+	//conf.RealtimePrinter = tracelog.RealtimePrinter
+	_, err = trace.Traceroute(f.TracerouteMethod, conf)
+	if err != nil && model.EnableLoger {
+		InitLogger()
+		defer Logger.Sync()
+		Logger.Info("trace failed: " + err.Error())
+	}
 }
 
-// traceWithRetry 执行带重试机制的追踪
-func traceWithRetry(ft fastTrace.FastTracer, isp fastTrace.ISPCollection, isIPv6 bool, config RetryConfig) {
-	attempt := 0
-	maxAttempts := config.MaxRetries + 1 // 包括首次尝试
-	for attempt < maxAttempts {
-		if attempt > 0 {
-			fmt.Printf("第 %d 次重试，等待 %v...\n", attempt, config.RetryDelay)
-			time.Sleep(config.RetryDelay)
-		}
-		success, err := performTrace(ft, isp, isIPv6)
-		if success {
-			return
-		}
-		if err != nil && model.EnableLoger {
-			log.Printf("第 %d 次尝试失败: %v\n", attempt+1, err)
-		}
-		attempt++
-	}
-	fmt.Printf("在 %d 次尝试后仍未获得有效的追踪结果\n", maxAttempts)
-}
-
-func TraceRoute(language, location, testType string, retryConfig RetryConfig) {
+func TraceRoute(language, location, testType string) {
 	if language == "zh" || language == "" {
 		language = "cn"
 	} else if language != "en" {
-		fmt.Println("无效的语言选项")
+		fmt.Println("Invalid language.")
 		return
 	}
 	var TL []fastTrace.ISPCollection
-	switch location {
-	case "GZ":
+	if location == "GZ" {
 		TL = []fastTrace.ISPCollection{model.GuangZhouCT, model.GuangZhouCU, model.GuangZhouCMCC}
-	case "BJ":
+	} else if location == "BJ" {
 		TL = []fastTrace.ISPCollection{model.BeiJingCT, model.BeiJingCU, model.BeiJingCMCC}
-	case "SH":
+	} else if location == "SH" {
 		TL = []fastTrace.ISPCollection{model.ShangHaiCT, model.ShangHaiCU, model.ShangHaiCMCC}
-	case "CD":
+	} else if location == "CD" {
 		TL = []fastTrace.ISPCollection{model.ChengDuCT, model.ChengDuCU, model.ChengDuCMCC}
-	default:
-		fmt.Println("无效的位置选项")
+	} else {
+		fmt.Println("Invalid location.")
 		return
 	}
 	pFastTrace := fastTrace.ParamsFastTrace{
@@ -234,14 +232,17 @@ func TraceRoute(language, location, testType string, retryConfig RetryConfig) {
 	ft.TracerouteMethod = trace.ICMPTrace
 	if TL != nil {
 		for _, T := range TL {
-			switch testType {
-			case "both":
-				traceWithRetry(ft, T, false, retryConfig) // IPv4
-				traceWithRetry(ft, T, true, retryConfig)  // IPv6
-			case "ipv4":
-				traceWithRetry(ft, T, false, retryConfig)
-			case "ipv6":
-				traceWithRetry(ft, T, true, retryConfig)
+			if testType == "both" {
+				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
+				tracert(ft, T)
+				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
+				tracert_v6(ft, T)
+			} else if testType == "ipv4" {
+				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
+				tracert(ft, T)
+			} else if testType == "ipv6" {
+				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
+				tracert_v6(ft, T)
 			}
 			time.Sleep(500 * time.Millisecond)
 		}
