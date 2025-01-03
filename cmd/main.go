@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/oneclickvirt/nt3/model"
 	"github.com/oneclickvirt/nt3/nt"
@@ -19,20 +18,16 @@ func main() {
 	fmt.Println("项目地址:", "https://github.com/oneclickvirt/nt3")
 	var showVersion, help bool
 	var language, checkType, location string
-	var maxRetries int
-	var retryDelay time.Duration
 	nt3Flag := flag.NewFlagSet("nt3", flag.ContinueOnError)
-	nt3Flag.BoolVar(&help, "h", false, "显示帮助信息")
-	nt3Flag.BoolVar(&showVersion, "v", false, "显示版本信息")
-	nt3Flag.StringVar(&language, "l", "zh", "指定语言参数 (en 或 zh)")
-	nt3Flag.StringVar(&checkType, "c", "ipv4", "指定检查类型 (both, ipv4, 或 ipv6)")
-	nt3Flag.StringVar(&location, "loc", "GZ", "指定位置 (支持 GZ, BJ, SH, CD; 对应广州、北京、上海、成都)")
-	nt3Flag.BoolVar(&model.EnableLoger, "log", false, "启用日志记录")
-	nt3Flag.IntVar(&maxRetries, "retries", 1, "失败重试次数")
-	nt3Flag.DurationVar(&retryDelay, "retry-delay", 5*time.Minute, "重试间隔时间")
+	nt3Flag.BoolVar(&help, "h", false, "Show help information")
+	nt3Flag.BoolVar(&showVersion, "v", false, "Show version information")
+	nt3Flag.StringVar(&language, "l", "zh", "Specify language parameter (en or zh)")
+	nt3Flag.StringVar(&checkType, "c", "ipv4", "Specify check type (both, ipv4, or ipv6)")
+	nt3Flag.StringVar(&location, "loc", "GZ", "Specify location (supports GZ, BJ, SH, CD; corresponding to Guangzhou, Beijing, Shanghai, Chengdu)")
+	nt3Flag.BoolVar(&model.EnableLoger, "log", false, "Enable logging")
 	nt3Flag.Parse(os.Args[1:])
 	if help {
-		fmt.Printf("用法: %s [选项]\n", os.Args[0])
+		fmt.Printf("Usage: %s [options]\n", os.Args[0])
 		nt3Flag.PrintDefaults()
 		return
 	}
@@ -52,10 +47,5 @@ func main() {
 	} else if strings.ToLower(checkType) == "ipv6" {
 		checkType = "ipv6"
 	}
-	// 创建重试配置
-	retryConfig := nt.RetryConfig{
-		MaxRetries: maxRetries,
-		RetryDelay: retryDelay,
-	}
-	nt.TraceRoute(language, location, checkType, retryConfig)
+	nt.TraceRoute(language, location, checkType)
 }
