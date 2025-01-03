@@ -20,7 +20,6 @@ import (
 )
 
 func realtimePrinter(res *trace.Result, ttl int) {
-	//fmt.Printf("%s  ", color.New(color.FgHiYellow, color.Bold).Sprintf("%-2d", ttl+1))
 	var latestIP string
 	tmpMap := make(map[string][]string)
 	for i, v := range res.Hops[ttl] {
@@ -42,28 +41,25 @@ func realtimePrinter(res *trace.Result, ttl int) {
 		tmpMap[v.Address.String()] = append(tmpMap[v.Address.String()], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 	}
 	if latestIP == "" {
-		fmt.Printf(White("*") + "\n")
+		fmt.Printf(White("*"))
+		time.Sleep(3 * time.Second) // Wait 3 seconds before retry
 		return
 	}
 	for ip, v := range tmpMap {
 		i, _ := strconv.Atoi(v[0])
 		rtt := v[1]
-		// 打印RTT
 		fmt.Printf(Cyan("%-12s "), rtt)
-		// 打印AS号
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
 			fmt.Printf(Yellow("%-10s "), fmt.Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber))
 		} else {
 			fmt.Printf(White("%-10s "), "*")
 		}
-		// 打印地理信息
 		if net.ParseIP(ip).To4() != nil {
 			whoisFormat := strings.Split(res.Hops[ttl][i].Geo.Whois, "-")
 			if len(whoisFormat) > 1 {
 				whoisFormat[0] = strings.Join(whoisFormat[:2], "-")
 			}
 			if whoisFormat[0] != "" {
-				//如果以RFC或DOD开头那么为空
 				if !(strings.HasPrefix(whoisFormat[0], "RFC") ||
 					strings.HasPrefix(whoisFormat[0], "DOD")) {
 					whoisFormat[0] = "[" + whoisFormat[0] + "]"
@@ -71,7 +67,6 @@ func realtimePrinter(res *trace.Result, ttl int) {
 					whoisFormat[0] = ""
 				}
 			}
-			// CMIN2, CUII, CN2, CUG 改为壕金色高亮
 			switch {
 			case res.Hops[ttl][i].Geo.Asnumber == "58807":
 				fallthrough
@@ -146,13 +141,21 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
 	conf.RealtimePrinter = realtimePrinter
-	//conf.RealtimePrinter = printer.RealtimePrinter
-	//conf.RealtimePrinter = tracelog.RealtimePrinter
-	_, err = trace.Traceroute(f.TracerouteMethod, conf)
+	// 第一次尝试
+	res, err := trace.Traceroute(f.TracerouteMethod, conf)
 	if err != nil && model.EnableLoger {
 		InitLogger()
 		defer Logger.Sync()
 		Logger.Info("trace failed: " + err.Error())
+	}
+	// 检查结果是否为空或hop长度为0
+	if res == nil || len(res.Hops) == 0 {
+		fmt.Printf("\nNo results received, retrying after 3 seconds...\n")
+		time.Sleep(3 * time.Second)
+		res, err = trace.Traceroute(f.TracerouteMethod, conf)
+		if err != nil && model.EnableLoger {
+			Logger.Info("second trace attempt failed: " + err.Error())
+		}
 	}
 }
 
@@ -181,13 +184,21 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
 	conf.RealtimePrinter = realtimePrinter
-	//conf.RealtimePrinter = printer.RealtimePrinter
-	//conf.RealtimePrinter = tracelog.RealtimePrinter
-	_, err = trace.Traceroute(f.TracerouteMethod, conf)
+	// 第一次尝试
+	res, err := trace.Traceroute(f.TracerouteMethod, conf)
 	if err != nil && model.EnableLoger {
 		InitLogger()
 		defer Logger.Sync()
 		Logger.Info("trace failed: " + err.Error())
+	}
+	// 检查结果是否为空或hop长度为0
+	if res == nil || len(res.Hops) == 0 {
+		fmt.Printf("\nNo results received, retrying after 3 seconds...\n")
+		time.Sleep(3 * time.Second)
+		res, err = trace.Traceroute(f.TracerouteMethod, conf)
+		if err != nil && model.EnableLoger {
+			Logger.Info("second trace attempt failed: " + err.Error())
+		}
 	}
 }
 
