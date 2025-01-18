@@ -35,7 +35,7 @@ jobs:
           echo "Deleting asset with ID: $asset"
           curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/oneclickvirt/nt3/releases/assets/$asset"
         done
-        sleep 60
+        sleep 10
 
   release-binary:
     name: Release Go Binary
@@ -54,7 +54,7 @@ jobs:
       run: |
         mkdir -p bin
         cd cmd
-        CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o ../bin/nt3-${{ matrix.goos }}-${{ matrix.goarch }} -v -ldflags="-extldflags=-static" .
+        CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o ../bin/nt3-${{ matrix.goos }}-${{ matrix.goarch }} -v -ldflags="-extldflags=-static -checklinkname=0" .
 
     - name: Upload New Assets
       run: |
