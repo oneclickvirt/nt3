@@ -2,7 +2,6 @@ package nt
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -117,10 +116,26 @@ func realtimePrinter(res *trace.Result, ttl int) {
 }
 
 func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
+	// 添加recover机制
+	defer func() {
+		if r := recover(); r != nil {
+			if model.EnableLoger {
+				InitLogger()
+				Logger.Error(fmt.Sprintf("tracert panic recovered: %v", r))
+			} else {
+				fmt.Printf("Error: tracert panic recovered: %v\n", r)
+			}
+		}
+	}()
 	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	if err != nil {
-		log.Fatal(err)
+		if model.EnableLoger {
+			InitLogger()
+			Logger.Error("domain lookup failed: " + err.Error())
+		}
+		fmt.Printf("Error: domain lookup failed: %v\n", err)
+		return
 	}
 	var conf = trace.Config{
 		BeginHop:         1,
@@ -145,7 +160,6 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 	res, err := trace.Traceroute(f.TracerouteMethod, conf)
 	if err != nil && model.EnableLoger {
 		InitLogger()
-		defer Logger.Sync()
 		Logger.Info("trace failed: " + err.Error())
 	}
 	// 检查结果是否为空或hop长度为0
@@ -160,10 +174,26 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 }
 
 func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
+	// 添加recover机制
+	defer func() {
+		if r := recover(); r != nil {
+			if model.EnableLoger {
+				InitLogger()
+				Logger.Error(fmt.Sprintf("tracert_v6 panic recovered: %v", r))
+			} else {
+				fmt.Printf("Error: tracert_v6 panic recovered: %v\n", r)
+			}
+		}
+	}()
 	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
 	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	if err != nil {
-		log.Fatal(err)
+		if model.EnableLoger {
+			InitLogger()
+			Logger.Error("domain lookup failed: " + err.Error())
+		}
+		fmt.Printf("Error: domain lookup failed: %v\n", err)
+		return
 	}
 	var conf = trace.Config{
 		BeginHop:         1,
@@ -188,7 +218,6 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 	res, err := trace.Traceroute(f.TracerouteMethod, conf)
 	if err != nil && model.EnableLoger {
 		InitLogger()
-		defer Logger.Sync()
 		Logger.Info("trace failed: " + err.Error())
 	}
 	// 检查结果是否为空或hop长度为0
@@ -203,6 +232,17 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 }
 
 func TraceRoute(language, location, testType string) {
+	// 添加recover机制
+	defer func() {
+		if r := recover(); r != nil {
+			if model.EnableLoger {
+				InitLogger()
+				Logger.Error(fmt.Sprintf("TraceRoute panic recovered: %v", r))
+			} else {
+				fmt.Printf("Error: TraceRoute panic recovered: %v\n", r)
+			}
+		}
+	}()
 	if language == "zh" || language == "" {
 		language = "cn"
 	} else if language != "en" {
@@ -238,23 +278,38 @@ func TraceRoute(language, location, testType string) {
 	w.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(w.Interrupt, os.Interrupt)
 	defer func() {
-		w.Conn.Close()
+		if w.Conn != nil {
+			w.Conn.Close()
+		}
 	}()
 	ft.TracerouteMethod = trace.ICMPTrace
 	if TL != nil {
 		for _, T := range TL {
-			if testType == "both" {
-				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
-				tracert(ft, T)
-				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
-				tracert_v6(ft, T)
-			} else if testType == "ipv4" {
-				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
-				tracert(ft, T)
-			} else if testType == "ipv6" {
-				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
-				tracert_v6(ft, T)
-			}
+			func() {
+				// 为每个追踪操作添加独立的recover
+				defer func() {
+					if r := recover(); r != nil {
+						if model.EnableLoger {
+							InitLogger()
+							Logger.Error(fmt.Sprintf("trace for %s panic recovered: %v", T.ISPName, r))
+						} else {
+							fmt.Printf("Error: trace for %s panic recovered: %v\n", T.ISPName, r)
+						}
+					}
+				}()
+				if testType == "both" {
+					fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
+					tracert(ft, T)
+					fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
+					tracert_v6(ft, T)
+				} else if testType == "ipv4" {
+					fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
+					tracert(ft, T)
+				} else if testType == "ipv6" {
+					fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
+					tracert_v6(ft, T)
+				}
+			}()
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
