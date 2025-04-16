@@ -60,12 +60,6 @@ Usage: nt3 [options]
   -v    Show version information
 ```
 
-![图片](https://github.com/oneclickvirt/nt3/assets/103393591/e287cfde-3a22-4532-972e-31da95241df0)
-
-![图片](https://github.com/oneclickvirt/nt3/assets/103393591/1f0ab6be-7900-438c-98a4-c338fd515933)
-
-![图片](https://github.com/oneclickvirt/nt3/assets/103393591/0484fadd-6887-4db4-afb9-e32e7f382463)
-
 ## 卸载
 
 ```
@@ -78,6 +72,14 @@ rm -rf /usr/bin/nt3
 ```
 go get -u github.com/oneclickvirt/nt3@v0.0.5-20250416131047
 ```
+
+## 示例图
+
+![图片](https://github.com/oneclickvirt/nt3/assets/103393591/e287cfde-3a22-4532-972e-31da95241df0)
+
+![图片](https://github.com/oneclickvirt/nt3/assets/103393591/1f0ab6be-7900-438c-98a4-c338fd515933)
+
+![图片](https://github.com/oneclickvirt/nt3/assets/103393591/0484fadd-6887-4db4-afb9-e32e7f382463)
 
 ## Thanks
 
