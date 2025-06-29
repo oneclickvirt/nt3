@@ -54,8 +54,13 @@ jobs:
       run: |
         mkdir -p bin
         cd cmd
-        CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o ../bin/nt3-${{ matrix.goos }}-${{ matrix.goarch }} -v -ldflags="-extldflags=-static -checklinkname=0" .
-
+        CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build \
+          -o ../bin/nt3-${{ matrix.goos }}-${{ matrix.goarch }} \
+          -v \
+          -ldflags="-extldflags=-static -checklinkname=0 -s -w" \
+          -trimpath \
+          .
+          
     - name: Upload New Assets
       run: |
         release_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/oneclickvirt/nt3/releases/tags/output" | jq -r '.id')
