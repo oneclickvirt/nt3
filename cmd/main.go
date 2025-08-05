@@ -23,7 +23,7 @@ func main() {
 	nt3Flag.BoolVar(&showVersion, "v", false, "Show version information")
 	nt3Flag.StringVar(&language, "l", "zh", "Specify language parameter (en or zh)")
 	nt3Flag.StringVar(&checkType, "c", "ipv4", "Specify check type (both, ipv4, or ipv6)")
-	nt3Flag.StringVar(&location, "loc", "GZ", "Specify location (supports GZ, BJ, SH, CD; corresponding to Guangzhou, Beijing, Shanghai, Chengdu)")
+	nt3Flag.StringVar(&location, "loc", "GZ", "Specify location (supports GZ, BJ, SH, CD, ALL; corresponding to Guangzhou, Beijing, Shanghai, Chengdu and All)")
 	nt3Flag.BoolVar(&model.EnableLoger, "log", false, "Enable logging")
 	nt3Flag.Parse(os.Args[1:])
 	if help {

@@ -268,6 +268,11 @@ func TraceRoute(language, location, testType string) {
 		TL = []fastTrace.ISPCollection{model.ShangHaiCT, model.ShangHaiCU, model.ShangHaiCMCC}
 	case "CD":
 		TL = []fastTrace.ISPCollection{model.ChengDuCT, model.ChengDuCU, model.ChengDuCMCC}
+	case "ALL":
+		TL = []fastTrace.ISPCollection{model.BeiJingCT, model.BeiJingCU, model.BeiJingCMCC,
+									   model.ShangHaiCT, model.ShangHaiCU, model.ShangHaiCMCC,
+									   model.GuangZhouCT, model.GuangZhouCU, model.GuangZhouCMCC,
+									   model.ChengDuCT, model.ChengDuCU, model.ChengDuCMCC}
 	default:
 		fmt.Println("Invalid location.")
 		return

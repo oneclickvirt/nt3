@@ -50,7 +50,7 @@ Usage: nt3 [options]
   -l string
         Specify language parameter (en or zh) (default "zh")
   -loc string
-        Specify location (supports GZ, BJ, SH, CD; corresponding to Guangzhou, Beijing, Shanghai, Chengdu) (default "GZ")
+        Specify location (supports GZ, BJ, SH, CD, ALL; corresponding to Guangzhou, Beijing, Shanghai, Chengdu and All) (default "GZ")
   -log
         Enable logging
   -v    Show version information
