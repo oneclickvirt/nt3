@@ -23,7 +23,6 @@ import (
 
 var lastPrintedStar = false
 
-// 添加输出缓冲区
 type OutputBuffer struct {
 	lines []string
 }
@@ -153,7 +152,7 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 	}
 }
 
-// tracert 现在返回输出结果
+// tracert
 func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []string {
 	defer func() {
 		if r := recover(); r != nil {
@@ -163,12 +162,10 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 			}
 		}
 	}()
-
 	buffer := &OutputBuffer{}
 	// 重置星号标志
 	lastPrintedStar = false
 	buffer.Add(fmt.Sprintf("traceroute to %s, %d hops max, %d byte packets", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize))
-
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	if err != nil {
 		if model.EnableLoger {
@@ -218,7 +215,7 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 	return buffer.GetAll()
 }
 
-// tracert_v6 现在返回输出结果
+// tracert_v6
 func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []string {
 	defer func() {
 		if r := recover(); r != nil {
@@ -228,12 +225,10 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 			}
 		}
 	}()
-
 	buffer := &OutputBuffer{}
 	// 重置星号标志
 	lastPrintedStar = false
 	buffer.Add(fmt.Sprintf("traceroute to %s, %d hops max, %d byte packets", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize))
-
 	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	if err != nil {
 		if model.EnableLoger {
@@ -299,9 +294,7 @@ func processTarget(ft fastTrace.FastTracer, target fastTrace.ISPCollection, test
 			}
 		}
 	}()
-
 	var allOutput []string
-
 	switch testType {
 	case "both":
 		// IPv4
@@ -321,7 +314,6 @@ func processTarget(ft fastTrace.FastTracer, target fastTrace.ISPCollection, test
 		output := tracert_v6(ft, target)
 		allOutput = append(allOutput, output...)
 	}
-
 	resultChan <- TraceResult{
 		ISPName:  target.ISPName,
 		TestType: testType,
@@ -330,7 +322,7 @@ func processTarget(ft fastTrace.FastTracer, target fastTrace.ISPCollection, test
 	}
 }
 
-// TraceRoute 现在通过通道返回结果，支持并发处理
+// TraceRoute 通过通道返回结果，支持并发处理
 func TraceRoute(language, location, testType string, resultChan chan<- TraceResult) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -341,7 +333,6 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}
 		close(resultChan)
 	}()
-
 	if language == "zh" || language == "" {
 		language = "cn"
 	} else if language != "en" {
@@ -353,7 +344,6 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}
 		return
 	}
-
 	var TL []fastTrace.ISPCollection
 	switch location {
 	case "GZ":
@@ -378,7 +368,6 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}
 		return
 	}
-
 	pFastTrace := fastTrace.ParamsFastTrace{
 		SrcDev:         "",
 		SrcAddr:        "",
@@ -390,7 +379,6 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		PktSize:        52,
 	}
 	ft := fastTrace.FastTracer{ParamsFastTrace: pFastTrace}
-
 	// 截留 wshandle.New() 的输出
 	oldColorOutput := color.Output
 	var buf bytes.Buffer
@@ -411,8 +399,6 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 			}
 		}
 	}
-
-	// 先发送wshandle的输出
 	if len(wsOutputLines) > 0 {
 		resultChan <- TraceResult{
 			ISPName:  "WSHandle",
@@ -421,7 +407,6 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 			Index:    -1, // 特殊索引表示这是初始化输出
 		}
 	}
-
 	wsHandle.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(wsHandle.Interrupt, os.Interrupt)
 	defer func() {
@@ -429,23 +414,16 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 			wsHandle.Conn.Close()
 		}
 	}()
-
 	ft.TracerouteMethod = trace.ICMPTrace
-
-	// 并发处理，每次最多3个
 	const maxConcurrent = 3
 	totalTargets := len(TL)
-
 	for i := 0; i < totalTargets; i += maxConcurrent {
 		end := i + maxConcurrent
 		if end > totalTargets {
 			end = totalTargets
 		}
-
 		var wg sync.WaitGroup
 		batchResultChan := make(chan TraceResult, end-i)
-
-		// 启动当前批次的goroutines
 		for j := i; j < end; j++ {
 			wg.Add(1)
 			go func(index int, target fastTrace.ISPCollection) {
@@ -453,25 +431,17 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 				processTarget(ft, target, testType, index, batchResultChan)
 			}(j, TL[j])
 		}
-
-		// 等待当前批次完成
 		go func() {
 			wg.Wait()
 			close(batchResultChan)
 		}()
-
-		// 收集当前批次的结果并按顺序发送
 		batchResults := make([]TraceResult, end-i)
 		for result := range batchResultChan {
 			batchResults[result.Index-i] = result
 		}
-
-		// 按顺序发送结果
 		for _, result := range batchResults {
 			resultChan <- result
 		}
-
-		// 在批次之间稍作延迟
 		if end < totalTargets {
 			time.Sleep(500 * time.Millisecond)
 		}

@@ -49,27 +49,22 @@ func main() {
 	} else if strings.ToLower(checkType) == "ipv6" {
 		checkType = "ipv6"
 	}
-
 	// 创建结果通道
 	resultChan := make(chan nt.TraceResult, 100) // 使用缓冲通道
-
 	// 启动TraceRoute goroutine
 	go nt.TraceRoute(language, location, checkType, resultChan)
-
 	// 处理结果
 	for result := range resultChan {
 		// 处理WSHandle初始化输出
 		if result.Index == -1 {
-			for _, res := range result.Output {
+			for index, res := range result.Output {
 				res = strings.TrimSpace(res)
-				if res != "" {
+				if res != "" && index == 0 {
 					fmt.Println(res)
 				}
 			}
 			continue
 		}
-
-		// 处理错误信息
 		if result.ISPName == "Error" {
 			for _, res := range result.Output {
 				res = strings.TrimSpace(res)
@@ -79,8 +74,6 @@ func main() {
 			}
 			return
 		}
-
-		// 处理正常的追踪结果
 		for _, res := range result.Output {
 			res = strings.TrimSpace(res)
 			if res == "" {
