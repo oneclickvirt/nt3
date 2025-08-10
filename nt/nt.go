@@ -3,7 +3,6 @@ package nt
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	fastTrace "github.com/nxtrace/NTrace-core/fast_trace"
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
@@ -22,6 +22,7 @@ import (
 
 var lastPrintedStar = false
 
+// 添加输出缓冲区
 type OutputBuffer struct {
 	lines []string
 }
@@ -153,10 +154,12 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 			}
 		}
 	}()
+
 	buffer := &OutputBuffer{}
 	// 重置星号标志
 	lastPrintedStar = false
 	buffer.Add(fmt.Sprintf("traceroute to %s, %d hops max, %d byte packets", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize))
+
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	if err != nil {
 		if model.EnableLoger {
@@ -203,6 +206,7 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 			Logger.Info("second trace attempt failed: " + err.Error())
 		}
 	}
+
 	return buffer.GetAll()
 }
 
@@ -216,10 +220,12 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 			}
 		}
 	}()
+
 	buffer := &OutputBuffer{}
 	// 重置星号标志
 	lastPrintedStar = false
 	buffer.Add(fmt.Sprintf("traceroute to %s, %d hops max, %d byte packets", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize))
+
 	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	if err != nil {
 		if model.EnableLoger {
@@ -266,6 +272,7 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 			Logger.Info("second trace attempt failed: " + err.Error())
 		}
 	}
+
 	return buffer.GetAll()
 }
 
@@ -279,7 +286,9 @@ func TraceRoute(language, location, testType string) []string {
 			}
 		}
 	}()
+
 	var allOutput []string
+
 	if language == "zh" || language == "" {
 		language = "cn"
 	} else if language != "en" {
@@ -316,40 +325,34 @@ func TraceRoute(language, location, testType string) []string {
 		PktSize:        52,
 	}
 	ft := fastTrace.FastTracer{ParamsFastTrace: pFastTrace}
+
 	// 截留 wshandle.New() 的输出
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-	os.Stderr = w
-	var wsOutput []string
-	done := make(chan bool)
-	// 在goroutine中读取输出
-	go func() {
-		var buf bytes.Buffer
-		io.Copy(&buf, r)
-		output := buf.String()
-		if output != "" {
-			// 将输出按行分割
-			lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
-			for _, line := range lines {
-				if line != "" {
-					wsOutput = append(wsOutput, line)
-				}
-			}
-		}
-		done <- true
-	}()
+	oldColorOutput := color.Output
+	var buf bytes.Buffer
+	color.Output = &buf
+
 	// 建立 WebSocket 连接
 	wsHandle := wshandle.New()
-	// 恢复标准输出
-	w.Close()
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-	<-done
-	r.Close()
+
+	// 恢复 color.Output
+	color.Output = oldColorOutput
+
+	// 获取截留的输出
+	wsOutput := buf.String()
+	var wsOutputLines []string
+	if wsOutput != "" {
+		// 将输出按行分割
+		lines := strings.Split(strings.TrimRight(wsOutput, "\n"), "\n")
+		for _, line := range lines {
+			if line != "" {
+				wsOutputLines = append(wsOutputLines, line)
+			}
+		}
+	}
+
 	// 将wshandle的输出添加到头部
-	allOutput = append(wsOutput, allOutput...)
+	allOutput = append(wsOutputLines, allOutput...)
+
 	wsHandle.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(wsHandle.Interrupt, os.Interrupt)
 	defer func() {
@@ -391,5 +394,6 @@ func TraceRoute(language, location, testType string) []string {
 		}()
 		time.Sleep(500 * time.Millisecond)
 	}
+
 	return allOutput
 }

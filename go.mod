@@ -3,12 +3,12 @@ module github.com/oneclickvirt/nt3
 go 1.24.5
 
 require (
+	github.com/fatih/color v1.18.0
 	github.com/nxtrace/NTrace-core v1.4.2
 	github.com/oneclickvirt/defaultset v0.0.2-20240624082446
 )
 
 require (
-	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
