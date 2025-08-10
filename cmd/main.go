@@ -49,7 +49,7 @@ func main() {
 	}
 	result := nt.TraceRoute(language, location, checkType)
 	for _, res := range result {
-		if strings.Contains(res, "- ICMP") {
+		if strings.Contains(res, "ICMP") || (strings.Contains(res, "NextTrace") && strings.Contains(res, "API")) {
 			fmt.Print(res)
 		}
 		fmt.Println(res)

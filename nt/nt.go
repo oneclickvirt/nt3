@@ -206,7 +206,6 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 			Logger.Info("second trace attempt failed: " + err.Error())
 		}
 	}
-
 	return buffer.GetAll()
 }
 
@@ -272,7 +271,6 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 			Logger.Info("second trace attempt failed: " + err.Error())
 		}
 	}
-
 	return buffer.GetAll()
 }
 
@@ -325,18 +323,14 @@ func TraceRoute(language, location, testType string) []string {
 		PktSize:        52,
 	}
 	ft := fastTrace.FastTracer{ParamsFastTrace: pFastTrace}
-
 	// 截留 wshandle.New() 的输出
 	oldColorOutput := color.Output
 	var buf bytes.Buffer
 	color.Output = &buf
-
 	// 建立 WebSocket 连接
 	wsHandle := wshandle.New()
-
 	// 恢复 color.Output
 	color.Output = oldColorOutput
-
 	// 获取截留的输出
 	wsOutput := buf.String()
 	var wsOutputLines []string
@@ -349,10 +343,8 @@ func TraceRoute(language, location, testType string) []string {
 			}
 		}
 	}
-
 	// 将wshandle的输出添加到头部
 	allOutput = append(wsOutputLines, allOutput...)
-
 	wsHandle.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(wsHandle.Interrupt, os.Interrupt)
 	defer func() {
@@ -394,6 +386,5 @@ func TraceRoute(language, location, testType string) []string {
 		}()
 		time.Sleep(500 * time.Millisecond)
 	}
-
 	return allOutput
 }
