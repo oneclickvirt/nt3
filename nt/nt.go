@@ -20,7 +20,24 @@ import (
 
 var lastPrintedStar = false
 
-func realtimePrinter(res *trace.Result, ttl int) {
+type OutputBuffer struct {
+	lines []string
+}
+
+func (ob *OutputBuffer) Add(line string) {
+	ob.lines = append(ob.lines, line)
+}
+
+func (ob *OutputBuffer) GetAll() []string {
+	return ob.lines
+}
+
+func (ob *OutputBuffer) Clear() {
+	ob.lines = nil
+}
+
+// realtimePrinter 现在接收 OutputBuffer 参数
+func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer) {
 	var latestIP string
 	tmpMap := make(map[string][]string)
 	for i, v := range res.Hops[ttl] {
@@ -44,7 +61,7 @@ func realtimePrinter(res *trace.Result, ttl int) {
 	if latestIP == "" {
 		// 如果上一次没有打印*，则打印*，否则跳过
 		if !lastPrintedStar {
-			fmt.Printf("%s", White("*")+"\n")
+			buffer.Add(White("*"))
 			lastPrintedStar = true
 		}
 		time.Sleep(3 * time.Second) // Wait 3 seconds before retry
@@ -55,11 +72,12 @@ func realtimePrinter(res *trace.Result, ttl int) {
 	for ip, v := range tmpMap {
 		i, _ := strconv.Atoi(v[0])
 		rtt := v[1]
-		fmt.Printf(Cyan("%-12s "), rtt)
+		line := ""
+		line += fmt.Sprintf(Cyan("%-12s "), rtt)
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
-			fmt.Printf(Yellow("%-10s "), fmt.Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber))
+			line += fmt.Sprintf(Yellow("%-10s "), fmt.Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber))
 		} else {
-			fmt.Printf(White("%-10s "), "*")
+			line += fmt.Sprintf(White("%-10s "), "*")
 		}
 		if net.ParseIP(ip).To4() != nil {
 			whoisFormat := strings.Split(res.Hops[ttl][i].Geo.Whois, "-")
@@ -94,9 +112,9 @@ func realtimePrinter(res *trace.Result, ttl int) {
 			case whoisFormat[0] == "[CMIN2-NET]":
 				fallthrough
 			case strings.HasPrefix(res.Hops[ttl][i].Address.String(), "59.43."):
-				fmt.Printf(Yellow("%s "), fmt.Sprintf("%-18s", whoisFormat[0]))
+				line += fmt.Sprintf(Yellow("%s "), fmt.Sprintf("%-18s", whoisFormat[0]))
 			default:
-				fmt.Printf(Green("%s "), fmt.Sprintf("%-18s", whoisFormat[0]))
+				line += fmt.Sprintf(Green("%s "), fmt.Sprintf("%-18s", whoisFormat[0]))
 			}
 			var parts []string
 			country := res.Hops[ttl][i].Geo.Country
@@ -116,35 +134,36 @@ func realtimePrinter(res *trace.Result, ttl int) {
 				parts = append(parts, White(owner))
 			}
 			if len(parts) > 0 {
-				fmt.Printf("%s", strings.Join(parts, ", "))
+				line += strings.Join(parts, ", ")
 			}
 		}
-		fmt.Println()
+		buffer.Add(line)
 	}
 }
 
-func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
+// tracert 现在返回输出结果
+func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []string {
 	defer func() {
 		if r := recover(); r != nil {
 			if model.EnableLoger {
 				InitLogger()
 				Logger.Error(fmt.Sprintf("tracert panic recovered: %v", r))
-			} else {
-				fmt.Printf("Error: tracert panic recovered: %v\n", r)
 			}
 		}
 	}()
+
+	buffer := &OutputBuffer{}
 	// 重置星号标志
 	lastPrintedStar = false
-	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+	buffer.Add(fmt.Sprintf("traceroute to %s, %d hops max, %d byte packets", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize))
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	if err != nil {
 		if model.EnableLoger {
 			InitLogger()
 			Logger.Error("domain lookup failed: " + err.Error())
 		}
-		fmt.Printf("Error: domain lookup failed: %v\n", err)
-		return
+		buffer.Add(fmt.Sprintf("Error: domain lookup failed: %v", err))
+		return buffer.GetAll()
 	}
 	var conf = trace.Config{
 		BeginHop:         1,
@@ -164,7 +183,10 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 		Lang:             f.ParamsFastTrace.Lang,
 		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
-	conf.RealtimePrinter = realtimePrinter
+	// 使用带buffer的printer
+	conf.RealtimePrinter = func(res *trace.Result, ttl int) {
+		realtimePrinterWithBuffer(res, ttl, buffer)
+	}
 	// 第一次尝试
 	res, err := trace.Traceroute(f.TracerouteMethod, conf)
 	if err != nil && model.EnableLoger {
@@ -173,37 +195,41 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 	}
 	// 检查结果是否为空或hop长度为0
 	if res == nil || len(res.Hops) == 0 {
-		fmt.Printf("\nNo results received, retrying after 3 seconds...\n")
+		buffer.Add("\nNo results received, retrying after 3 seconds...")
 		time.Sleep(3 * time.Second)
 		_, err = trace.Traceroute(f.TracerouteMethod, conf)
 		if err != nil && model.EnableLoger {
 			Logger.Info("second trace attempt failed: " + err.Error())
 		}
 	}
+
+	return buffer.GetAll()
 }
 
-func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
+// tracert_v6 现在返回输出结果
+func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []string {
 	defer func() {
 		if r := recover(); r != nil {
 			if model.EnableLoger {
 				InitLogger()
 				Logger.Error(fmt.Sprintf("tracert_v6 panic recovered: %v", r))
-			} else {
-				fmt.Printf("Error: tracert_v6 panic recovered: %v\n", r)
 			}
 		}
 	}()
+
+	buffer := &OutputBuffer{}
 	// 重置星号标志
 	lastPrintedStar = false
-	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+	buffer.Add(fmt.Sprintf("traceroute to %s, %d hops max, %d byte packets", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize))
+
 	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	if err != nil {
 		if model.EnableLoger {
 			InitLogger()
 			Logger.Error("domain lookup failed: " + err.Error())
 		}
-		fmt.Printf("Error: domain lookup failed: %v\n", err)
-		return
+		buffer.Add(fmt.Sprintf("Error: domain lookup failed: %v", err))
+		return buffer.GetAll()
 	}
 	var conf = trace.Config{
 		BeginHop:         1,
@@ -223,7 +249,10 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 		Lang:             f.ParamsFastTrace.Lang,
 		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
-	conf.RealtimePrinter = realtimePrinter
+	// 使用带buffer的printer
+	conf.RealtimePrinter = func(res *trace.Result, ttl int) {
+		realtimePrinterWithBuffer(res, ttl, buffer)
+	}
 	// 第一次尝试
 	res, err := trace.Traceroute(f.TracerouteMethod, conf)
 	if err != nil && model.EnableLoger {
@@ -232,31 +261,33 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) {
 	}
 	// 检查结果是否为空或hop长度为0
 	if res == nil || len(res.Hops) == 0 {
-		fmt.Printf("\nNo results received, retrying after 3 seconds...\n")
+		buffer.Add("\nNo results received, retrying after 3 seconds...")
 		time.Sleep(3 * time.Second)
 		_, err = trace.Traceroute(f.TracerouteMethod, conf)
 		if err != nil && model.EnableLoger {
 			Logger.Info("second trace attempt failed: " + err.Error())
 		}
 	}
+
+	return buffer.GetAll()
 }
 
-func TraceRoute(language, location, testType string) {
+// TraceRoute 现在可以收集所有输出并统一处理
+func TraceRoute(language, location, testType string) []string {
 	defer func() {
 		if r := recover(); r != nil {
 			if model.EnableLoger {
 				InitLogger()
 				Logger.Error(fmt.Sprintf("TraceRoute panic recovered: %v", r))
-			} else {
-				fmt.Printf("Error: TraceRoute panic recovered: %v\n", r)
 			}
 		}
 	}()
+	var allOutput []string
 	if language == "zh" || language == "" {
 		language = "cn"
 	} else if language != "en" {
-		fmt.Println("Invalid language.")
-		return
+		allOutput = append(allOutput, "Invalid language.")
+		return allOutput
 	}
 	var TL []fastTrace.ISPCollection
 	switch location {
@@ -270,12 +301,12 @@ func TraceRoute(language, location, testType string) {
 		TL = []fastTrace.ISPCollection{model.ChengDuCT, model.ChengDuCU, model.ChengDuCMCC}
 	case "ALL":
 		TL = []fastTrace.ISPCollection{model.BeiJingCT, model.BeiJingCU, model.BeiJingCMCC,
-									   model.ShangHaiCT, model.ShangHaiCU, model.ShangHaiCMCC,
-									   model.GuangZhouCT, model.GuangZhouCU, model.GuangZhouCMCC,
-									   model.ChengDuCT, model.ChengDuCU, model.ChengDuCMCC}
+			model.ShangHaiCT, model.ShangHaiCU, model.ShangHaiCMCC,
+			model.GuangZhouCT, model.GuangZhouCU, model.GuangZhouCMCC,
+			model.ChengDuCT, model.ChengDuCU, model.ChengDuCMCC}
 	default:
-		fmt.Println("Invalid location.")
-		return
+		allOutput = append(allOutput, "Invalid location.")
+		return allOutput
 	}
 	pFastTrace := fastTrace.ParamsFastTrace{
 		SrcDev:         "",
@@ -307,24 +338,29 @@ func TraceRoute(language, location, testType string) {
 						InitLogger()
 						Logger.Error(fmt.Sprintf("trace for %s panic recovered: %v", T.ISPName, r))
 					} else {
-						fmt.Printf("Error: trace for %s panic recovered: %v\n", T.ISPName, r)
+						allOutput = append(allOutput, fmt.Sprintf("Error: trace for %s panic recovered: %v", T.ISPName, r))
 					}
 				}
 			}()
 			switch testType {
 			case "both":
-				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
-				tracert(ft, T)
-				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
-				tracert_v6(ft, T)
+				allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName)))
+				output := tracert(ft, T)
+				allOutput = append(allOutput, output...)
+				allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName)))
+				output = tracert_v6(ft, T)
+				allOutput = append(allOutput, output...)
 			case "ipv4":
-				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName))
-				tracert(ft, T)
+				allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName)))
+				output := tracert(ft, T)
+				allOutput = append(allOutput, output...)
 			case "ipv6":
-				fmt.Printf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName))
-				tracert_v6(ft, T)
+				allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName)))
+				output := tracert_v6(ft, T)
+				allOutput = append(allOutput, output...)
 			}
 		}()
 		time.Sleep(500 * time.Millisecond)
 	}
+	return allOutput
 }

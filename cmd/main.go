@@ -47,5 +47,8 @@ func main() {
 	} else if strings.ToLower(checkType) == "ipv6" {
 		checkType = "ipv6"
 	}
-	nt.TraceRoute(language, location, checkType)
+	result := nt.TraceRoute(language, location, checkType)
+	for _, res := range result {
+		fmt.Println(res)
+	}
 }
