@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -37,6 +38,14 @@ func (ob *OutputBuffer) GetAll() []string {
 
 func (ob *OutputBuffer) Clear() {
 	ob.lines = nil
+}
+
+// TraceResult 包含追踪结果和目标信息
+type TraceResult struct {
+	ISPName  string
+	TestType string
+	Output   []string
+	Index    int // 用于保持原始顺序
 }
 
 // realtimePrinter 现在接收 OutputBuffer 参数
@@ -274,8 +283,55 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 	return buffer.GetAll()
 }
 
-// TraceRoute 现在可以收集所有输出并统一处理
-func TraceRoute(language, location, testType string) []string {
+// processTarget 处理单个目标的追踪
+func processTarget(ft fastTrace.FastTracer, target fastTrace.ISPCollection, testType string, index int, resultChan chan<- TraceResult) {
+	defer func() {
+		if r := recover(); r != nil {
+			if model.EnableLoger {
+				InitLogger()
+				Logger.Error(fmt.Sprintf("processTarget panic recovered: %v", r))
+			}
+			resultChan <- TraceResult{
+				ISPName:  target.ISPName,
+				TestType: testType,
+				Output:   []string{fmt.Sprintf("Error: trace for %s panic recovered: %v", target.ISPName, r)},
+				Index:    index,
+			}
+		}
+	}()
+
+	var allOutput []string
+
+	switch testType {
+	case "both":
+		// IPv4
+		allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", target.ISPName)))
+		output := tracert(ft, target)
+		allOutput = append(allOutput, output...)
+		// IPv6
+		allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", target.ISPName)))
+		output = tracert_v6(ft, target)
+		allOutput = append(allOutput, output...)
+	case "ipv4":
+		allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", target.ISPName)))
+		output := tracert(ft, target)
+		allOutput = append(allOutput, output...)
+	case "ipv6":
+		allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", target.ISPName)))
+		output := tracert_v6(ft, target)
+		allOutput = append(allOutput, output...)
+	}
+
+	resultChan <- TraceResult{
+		ISPName:  target.ISPName,
+		TestType: testType,
+		Output:   allOutput,
+		Index:    index,
+	}
+}
+
+// TraceRoute 现在通过通道返回结果，支持并发处理
+func TraceRoute(language, location, testType string, resultChan chan<- TraceResult) {
 	defer func() {
 		if r := recover(); r != nil {
 			if model.EnableLoger {
@@ -283,16 +339,21 @@ func TraceRoute(language, location, testType string) []string {
 				Logger.Error(fmt.Sprintf("TraceRoute panic recovered: %v", r))
 			}
 		}
+		close(resultChan)
 	}()
-
-	var allOutput []string
 
 	if language == "zh" || language == "" {
 		language = "cn"
 	} else if language != "en" {
-		allOutput = append(allOutput, "Invalid language.")
-		return allOutput
+		resultChan <- TraceResult{
+			ISPName:  "Error",
+			TestType: testType,
+			Output:   []string{"Invalid language."},
+			Index:    0,
+		}
+		return
 	}
+
 	var TL []fastTrace.ISPCollection
 	switch location {
 	case "GZ":
@@ -309,9 +370,15 @@ func TraceRoute(language, location, testType string) []string {
 			model.GuangZhouCT, model.GuangZhouCU, model.GuangZhouCMCC,
 			model.ChengDuCT, model.ChengDuCU, model.ChengDuCMCC}
 	default:
-		allOutput = append(allOutput, "Invalid location.")
-		return allOutput
+		resultChan <- TraceResult{
+			ISPName:  "Error",
+			TestType: testType,
+			Output:   []string{"Invalid location."},
+			Index:    0,
+		}
+		return
 	}
+
 	pFastTrace := fastTrace.ParamsFastTrace{
 		SrcDev:         "",
 		SrcAddr:        "",
@@ -323,6 +390,7 @@ func TraceRoute(language, location, testType string) []string {
 		PktSize:        52,
 	}
 	ft := fastTrace.FastTracer{ParamsFastTrace: pFastTrace}
+
 	// 截留 wshandle.New() 的输出
 	oldColorOutput := color.Output
 	var buf bytes.Buffer
@@ -343,8 +411,17 @@ func TraceRoute(language, location, testType string) []string {
 			}
 		}
 	}
-	// 将wshandle的输出添加到头部
-	allOutput = append(wsOutputLines, allOutput...)
+
+	// 先发送wshandle的输出
+	if len(wsOutputLines) > 0 {
+		resultChan <- TraceResult{
+			ISPName:  "WSHandle",
+			TestType: "info",
+			Output:   wsOutputLines,
+			Index:    -1, // 特殊索引表示这是初始化输出
+		}
+	}
+
 	wsHandle.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(wsHandle.Interrupt, os.Interrupt)
 	defer func() {
@@ -352,39 +429,51 @@ func TraceRoute(language, location, testType string) []string {
 			wsHandle.Conn.Close()
 		}
 	}()
+
 	ft.TracerouteMethod = trace.ICMPTrace
-	for _, T := range TL {
-		func() {
-			// 为每个追踪操作添加独立的recover
-			defer func() {
-				if r := recover(); r != nil {
-					if model.EnableLoger {
-						InitLogger()
-						Logger.Error(fmt.Sprintf("trace for %s panic recovered: %v", T.ISPName, r))
-					} else {
-						allOutput = append(allOutput, fmt.Sprintf("Error: trace for %s panic recovered: %v", T.ISPName, r))
-					}
-				}
-			}()
-			switch testType {
-			case "both":
-				allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName)))
-				output := tracert(ft, T)
-				allOutput = append(allOutput, output...)
-				allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName)))
-				output = tracert_v6(ft, T)
-				allOutput = append(allOutput, output...)
-			case "ipv4":
-				allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v4", T.ISPName)))
-				output := tracert(ft, T)
-				allOutput = append(allOutput, output...)
-			case "ipv6":
-				allOutput = append(allOutput, fmt.Sprintf(Yellow("%s - "), fmt.Sprintf("%s - ICMP v6", T.ISPName)))
-				output := tracert_v6(ft, T)
-				allOutput = append(allOutput, output...)
-			}
+
+	// 并发处理，每次最多3个
+	const maxConcurrent = 3
+	totalTargets := len(TL)
+
+	for i := 0; i < totalTargets; i += maxConcurrent {
+		end := i + maxConcurrent
+		if end > totalTargets {
+			end = totalTargets
+		}
+
+		var wg sync.WaitGroup
+		batchResultChan := make(chan TraceResult, end-i)
+
+		// 启动当前批次的goroutines
+		for j := i; j < end; j++ {
+			wg.Add(1)
+			go func(index int, target fastTrace.ISPCollection) {
+				defer wg.Done()
+				processTarget(ft, target, testType, index, batchResultChan)
+			}(j, TL[j])
+		}
+
+		// 等待当前批次完成
+		go func() {
+			wg.Wait()
+			close(batchResultChan)
 		}()
-		time.Sleep(500 * time.Millisecond)
+
+		// 收集当前批次的结果并按顺序发送
+		batchResults := make([]TraceResult, end-i)
+		for result := range batchResultChan {
+			batchResults[result.Index-i] = result
+		}
+
+		// 按顺序发送结果
+		for _, result := range batchResults {
+			resultChan <- result
+		}
+
+		// 在批次之间稍作延迟
+		if end < totalTargets {
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
-	return allOutput
 }
