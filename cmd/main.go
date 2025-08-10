@@ -16,7 +16,6 @@ func main() {
 		http.Get("https://hits.spiritlhl.net/nt3.svg?action=hit&title=Hits&title_bg=%23555555&count_bg=%230eecf8&edge_flat=false")
 	}()
 	fmt.Println("Repo:", "https://github.com/oneclickvirt/nt3")
-
 	var showVersion, help bool
 	var language, checkType, location string
 	nt3Flag := flag.NewFlagSet("nt3", flag.ContinueOnError)
@@ -27,7 +26,6 @@ func main() {
 	nt3Flag.StringVar(&location, "loc", "GZ", "Specify location (supports GZ, BJ, SH, CD, ALL; corresponding to Guangzhou, Beijing, Shanghai, Chengdu and All)")
 	nt3Flag.BoolVar(&model.EnableLoger, "log", false, "Enable logging")
 	nt3Flag.Parse(os.Args[1:])
-
 	if help {
 		fmt.Printf("Usage: %s [options]\n", os.Args[0])
 		nt3Flag.PrintDefaults()
