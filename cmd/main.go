@@ -49,6 +49,9 @@ func main() {
 	}
 	result := nt.TraceRoute(language, location, checkType)
 	for _, res := range result {
+		if strings.Contains(res, "- ICMP") {
+			fmt.Print(res)
+		}
 		fmt.Println(res)
 	}
 }

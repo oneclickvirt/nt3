@@ -1,7 +1,9 @@
 package nt
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -151,7 +153,6 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 			}
 		}
 	}()
-
 	buffer := &OutputBuffer{}
 	// 重置星号标志
 	lastPrintedStar = false
@@ -202,7 +203,6 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 			Logger.Info("second trace attempt failed: " + err.Error())
 		}
 	}
-
 	return buffer.GetAll()
 }
 
@@ -216,12 +216,10 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 			}
 		}
 	}()
-
 	buffer := &OutputBuffer{}
 	// 重置星号标志
 	lastPrintedStar = false
 	buffer.Add(fmt.Sprintf("traceroute to %s, %d hops max, %d byte packets", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize))
-
 	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	if err != nil {
 		if model.EnableLoger {
@@ -268,7 +266,6 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 			Logger.Info("second trace attempt failed: " + err.Error())
 		}
 	}
-
 	return buffer.GetAll()
 }
 
@@ -319,13 +316,45 @@ func TraceRoute(language, location, testType string) []string {
 		PktSize:        52,
 	}
 	ft := fastTrace.FastTracer{ParamsFastTrace: pFastTrace}
+	// 截留 wshandle.New() 的输出
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	os.Stderr = w
+	var wsOutput []string
+	done := make(chan bool)
+	// 在goroutine中读取输出
+	go func() {
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		output := buf.String()
+		if output != "" {
+			// 将输出按行分割
+			lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+			for _, line := range lines {
+				if line != "" {
+					wsOutput = append(wsOutput, line)
+				}
+			}
+		}
+		done <- true
+	}()
 	// 建立 WebSocket 连接
-	w := wshandle.New()
-	w.Interrupt = make(chan os.Signal, 1)
-	signal.Notify(w.Interrupt, os.Interrupt)
+	wsHandle := wshandle.New()
+	// 恢复标准输出
+	w.Close()
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+	<-done
+	r.Close()
+	// 将wshandle的输出添加到头部
+	allOutput = append(wsOutput, allOutput...)
+	wsHandle.Interrupt = make(chan os.Signal, 1)
+	signal.Notify(wsHandle.Interrupt, os.Interrupt)
 	defer func() {
-		if w.Conn != nil {
-			w.Conn.Close()
+		if wsHandle.Conn != nil {
+			wsHandle.Conn.Close()
 		}
 	}()
 	ft.TracerouteMethod = trace.ICMPTrace
