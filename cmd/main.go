@@ -49,9 +49,13 @@ func main() {
 	}
 	result := nt.TraceRoute(language, location, checkType)
 	for _, res := range result {
-		if strings.TrimSpace(res) != "" && strings.Contains(res, "ICMP") { // || (strings.Contains(res, "NextTrace") && strings.Contains(res, "API"))
-			fmt.Print(strings.ReplaceAll(res, "\n", ""))
-		} else if strings.TrimSpace(res) != "" {
+		res = strings.TrimSpace(res)
+		if res == "" {
+			continue
+		}
+		if strings.Contains(res, "ICMP") {
+			fmt.Print(res)
+		} else {
 			fmt.Println(res)
 		}
 	}
