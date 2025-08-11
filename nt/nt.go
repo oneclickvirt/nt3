@@ -1,7 +1,6 @@
 package nt
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -333,7 +332,6 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}
 		close(resultChan)
 	}()
-
 	if language == "zh" || language == "" {
 		language = "cn"
 	} else if language != "en" {
@@ -345,7 +343,6 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}
 		return
 	}
-
 	var TL []fastTrace.ISPCollection
 	switch location {
 	case "GZ":
@@ -370,7 +367,6 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}
 		return
 	}
-
 	pFastTrace := fastTrace.ParamsFastTrace{
 		SrcDev:         "",
 		SrcAddr:        "",
@@ -382,44 +378,7 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		PktSize:        52,
 	}
 	ft := fastTrace.FastTracer{ParamsFastTrace: pFastTrace}
-	// 检测是否已经被外部重定向
-	isRedirected := isOutputRedirected()
-	var wsOutputLines []string
-	var wsHandle *wshandle.WsConn
-	if isRedirected {
-		// 如果已被重定向，直接创建 wshandle，不再重定向
-		wsHandle = wshandle.New()
-		// 由于输出已被外部捕获，这里不需要特殊处理
-	} else {
-		// 原有的重定向逻辑
-		oldColorOutput := color.Output
-		var buf bytes.Buffer
-		color.Output = &buf
-		// 建立 WebSocket 连接
-		wsHandle = wshandle.New()
-		// 恢复 color.Output
-		color.Output = oldColorOutput
-		// 获取截留的输出
-		wsOutput := buf.String()
-		if wsOutput != "" {
-			// 将输出按行分割
-			lines := strings.Split(strings.TrimRight(wsOutput, "\n"), "\n")
-			for _, line := range lines {
-				if line != "" {
-					wsOutputLines = append(wsOutputLines, line)
-				}
-			}
-		}
-	}
-	// 只有在非重定向状态下且有输出时才发送 wshandle 输出
-	if len(wsOutputLines) > 0 {
-		resultChan <- TraceResult{
-			ISPName:  "WSHandle",
-			TestType: "info",
-			Output:   wsOutputLines,
-			Index:    -1, // 特殊索引表示这是初始化输出
-		}
-	}
+	wsHandle := wshandle.New() // 官方有输出重定向，待修复
 	wsHandle.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(wsHandle.Interrupt, os.Interrupt)
 	defer func() {
@@ -459,22 +418,4 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
-}
-
-// 检测输出是否已被重定向的辅助函数
-func isOutputRedirected() bool {
-	// 方法1：检查 os.Stdout 是否指向管道或文件
-	if stat, err := os.Stdout.Stat(); err == nil {
-		// 如果不是字符设备（终端），说明被重定向了
-		mode := stat.Mode()
-		if (mode & os.ModeCharDevice) == 0 {
-			return true
-		}
-		// 检查是否是管道
-		if (mode & os.ModeNamedPipe) != 0 {
-			return true
-		}
-	}
-	// 方法2：检查 color.Output 是否不等于 os.Stdout
-	return color.Output != os.Stdout
 }
