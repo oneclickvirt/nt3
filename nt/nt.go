@@ -333,7 +333,7 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}
 		close(resultChan)
 	}()
-	
+
 	if language == "zh" || language == "" {
 		language = "cn"
 	} else if language != "en" {
@@ -345,7 +345,7 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}
 		return
 	}
-	
+
 	var TL []fastTrace.ISPCollection
 	switch location {
 	case "GZ":
@@ -370,7 +370,7 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}
 		return
 	}
-	
+
 	pFastTrace := fastTrace.ParamsFastTrace{
 		SrcDev:         "",
 		SrcAddr:        "",
@@ -385,9 +385,10 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 	// 检测是否已经被外部重定向
 	isRedirected := isOutputRedirected()
 	var wsOutputLines []string
+	var wsHandle *wshandle.WsConn
 	if isRedirected {
 		// 如果已被重定向，直接创建 wshandle，不再重定向
-		wsHandle := wshandle.New()
+		wsHandle = wshandle.New()
 		// 由于输出已被外部捕获，这里不需要特殊处理
 	} else {
 		// 原有的重定向逻辑
@@ -395,7 +396,7 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		var buf bytes.Buffer
 		color.Output = &buf
 		// 建立 WebSocket 连接
-		wsHandle := wshandle.New()
+		wsHandle = wshandle.New()
 		// 恢复 color.Output
 		color.Output = oldColorOutput
 		// 获取截留的输出
