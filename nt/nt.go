@@ -175,12 +175,12 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 	}
 	var conf = trace.Config{
 		BeginHop:         1,
-		DestIP:           ip,
-		DestPort:         80,
+		DstIP:            ip,
+		DstPort:          80,
 		MaxHops:          30,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             f.ParamsFastTrace.RDns,
+		RDNS:             f.ParamsFastTrace.RDNS,
 		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
 		PacketInterval:   50,
 		TTLInterval:      50,
@@ -189,7 +189,6 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
 		PktSize:          52,
 		Lang:             f.ParamsFastTrace.Lang,
-		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
 	// 使用带buffer的printer
 	conf.RealtimePrinter = func(res *trace.Result, ttl int) {
@@ -238,12 +237,12 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 	}
 	var conf = trace.Config{
 		BeginHop:         1,
-		DestIP:           ip,
-		DestPort:         80,
+		DstIP:            ip,
+		DstPort:          80,
 		MaxHops:          30,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             f.ParamsFastTrace.RDns,
+		RDNS:             f.ParamsFastTrace.RDNS,
 		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
 		PacketInterval:   50,
 		TTLInterval:      50,
@@ -252,7 +251,6 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
 		PktSize:          52,
 		Lang:             f.ParamsFastTrace.Lang,
-		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
 	// 使用带buffer的printer
 	conf.RealtimePrinter = func(res *trace.Result, ttl int) {
@@ -371,7 +369,7 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		SrcAddr:        "",
 		BeginHop:       1,
 		MaxHops:        30,
-		RDns:           false,
+		RDNS:           false,
 		AlwaysWaitRDNS: false,
 		Lang:           language,
 		PktSize:        52,
