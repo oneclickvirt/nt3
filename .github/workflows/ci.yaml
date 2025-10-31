@@ -20,7 +20,14 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - name: Test
-        run: go test ./... -coverprofile=coverage.txt
+        run: |
+          # 检查是否有测试文件
+          if find . -name "*_test.go" -type f | grep -q .; then
+            go test ./... -coverprofile=coverage.txt
+          else
+            echo "No test files found, skipping tests"
+            go build -v ./...
+          fi
 
       - name: Create Tag
         if: success() # 仅在测试成功时运行

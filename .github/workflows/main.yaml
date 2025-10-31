@@ -24,7 +24,13 @@ jobs:
       
     - name: Test on Default Platform
       run: |
-        go test -v ./...
+        # 检查是否有测试文件
+        if find . -name "*_test.go" -type f | grep -q .; then
+          go test -v ./...
+        else
+          echo "No test files found, skipping tests"
+          go build -v ./...
+        fi
     
     - name: Delete Existing Release Assets
       run: |
