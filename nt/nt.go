@@ -2,7 +2,6 @@ package nt
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -49,11 +48,23 @@ type TraceResult struct {
 func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer) {
 	var latestIP string
 	tmpMap := make(map[string][]string)
+	hasValidData := false // 标记是否有任何有效的数据（包括延迟）
+	
 	for i, v := range res.Hops[ttl] {
+		// 检查是否有延迟数据
+		if v.RTT > 0 {
+			hasValidData = true
+		}
+		
 		if v.Address == nil && latestIP != "" {
 			tmpMap[latestIP] = append(tmpMap[latestIP], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 			continue
 		} else if v.Address == nil {
+			// 即使没有地址，如果有延迟数据，也应该记录
+			if v.RTT > 0 {
+				// 使用特殊的标记来表示没有IP但有延迟
+				tmpMap["*"] = append(tmpMap["*"], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
+			}
 			continue
 		}
 		if _, exist := tmpMap[v.Address.String()]; !exist {
@@ -67,7 +78,9 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		}
 		tmpMap[v.Address.String()] = append(tmpMap[v.Address.String()], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 	}
-	if latestIP == "" {
+	
+	// 如果没有任何有效数据（既没有IP也没有延迟），才打印*
+	if !hasValidData && latestIP == "" {
 		// 如果上一次没有打印*，则打印*，否则跳过
 		if !lastPrintedStar {
 			buffer.Add(White("*"))
@@ -76,9 +89,25 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		time.Sleep(3 * time.Second) // Wait 3 seconds before retry
 		return
 	}
+	
 	// 重置星号标志，因为这次有实际内容
 	lastPrintedStar = false
+	
 	for ip, v := range tmpMap {
+		// 处理没有IP但有延迟的情况
+		if ip == "*" {
+			// 输出延迟但是地址为*的情况
+			for idx := 0; idx < len(v); idx++ {
+				line := ""
+				line += fmt.Sprintf(Cyan("%-12s "), v[idx])
+				line += fmt.Sprintf(White("%-10s "), "*") // AS号为*
+				line += fmt.Sprintf(White("%-18s "), "*") // Whois为*
+				line += White("*") // 地理位置为*
+				buffer.Add(line)
+			}
+			continue
+		}
+		
 		i, _ := strconv.Atoi(v[0])
 		rtt := v[1]
 		line := ""
@@ -88,64 +117,77 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		} else {
 			line += fmt.Sprintf(White("%-10s "), "*")
 		}
-		if net.ParseIP(ip).To4() != nil {
-			whoisFormat := strings.Split(res.Hops[ttl][i].Geo.Whois, "-")
-			if len(whoisFormat) > 1 {
-				whoisFormat[0] = strings.Join(whoisFormat[:2], "-")
-			}
-			if whoisFormat[0] != "" {
-				if !(strings.HasPrefix(whoisFormat[0], "RFC") ||
-					strings.HasPrefix(whoisFormat[0], "DOD")) {
-					whoisFormat[0] = "[" + whoisFormat[0] + "]"
-				} else {
-					whoisFormat[0] = ""
-				}
-			}
-			switch {
-			case res.Hops[ttl][i].Geo.Asnumber == "58807":
-				fallthrough
-			case res.Hops[ttl][i].Geo.Asnumber == "10099":
-				fallthrough
-			case res.Hops[ttl][i].Geo.Asnumber == "4809":
-				fallthrough
-			case res.Hops[ttl][i].Geo.Asnumber == "9929":
-				fallthrough
-			case res.Hops[ttl][i].Geo.Asnumber == "23764":
-				fallthrough
-			case whoisFormat[0] == "[CTG-CN]":
-				fallthrough
-			case whoisFormat[0] == "[CNC-BACKBONE]":
-				fallthrough
-			case whoisFormat[0] == "[CUG-BACKBONE]":
-				fallthrough
-			case whoisFormat[0] == "[CMIN2-NET]":
-				fallthrough
-			case strings.HasPrefix(res.Hops[ttl][i].Address.String(), "59.43."):
-				line += fmt.Sprintf(Yellow("%s "), fmt.Sprintf("%-18s", whoisFormat[0]))
-			default:
-				line += fmt.Sprintf(Green("%s "), fmt.Sprintf("%-18s", whoisFormat[0]))
-			}
-			var parts []string
-			country := res.Hops[ttl][i].Geo.Country
-			prov := res.Hops[ttl][i].Geo.Prov
-			city := res.Hops[ttl][i].Geo.City
-			owner := res.Hops[ttl][i].Geo.Owner
-			if country != "" {
-				parts = append(parts, White(country))
-			}
-			if prov != "" {
-				parts = append(parts, White(prov))
-			}
-			if city != "" {
-				parts = append(parts, White(city))
-			}
-			if owner != "" {
-				parts = append(parts, White(owner))
-			}
-			if len(parts) > 0 {
-				line += strings.Join(parts, ", ")
+		
+		// 处理 Whois 信息（IPv4 和 IPv6 都适用）
+		whoisFormat := strings.Split(res.Hops[ttl][i].Geo.Whois, "-")
+		if len(whoisFormat) > 1 {
+			whoisFormat[0] = strings.Join(whoisFormat[:2], "-")
+		}
+		if whoisFormat[0] != "" {
+			if !(strings.HasPrefix(whoisFormat[0], "RFC") ||
+				strings.HasPrefix(whoisFormat[0], "DOD")) {
+				whoisFormat[0] = "[" + whoisFormat[0] + "]"
+			} else {
+				whoisFormat[0] = ""
 			}
 		}
+		// 如果whoisFormat[0]为空，显示*
+		displayWhois := whoisFormat[0]
+		if displayWhois == "" {
+			displayWhois = "*"
+		}
+		
+		// 根据 AS 号或 Whois 信息决定颜色（IPv4 和 IPv6 都适用）
+		switch {
+		case res.Hops[ttl][i].Geo.Asnumber == "58807":
+			fallthrough
+		case res.Hops[ttl][i].Geo.Asnumber == "10099":
+			fallthrough
+		case res.Hops[ttl][i].Geo.Asnumber == "4809":
+			fallthrough
+		case res.Hops[ttl][i].Geo.Asnumber == "9929":
+			fallthrough
+		case res.Hops[ttl][i].Geo.Asnumber == "23764":
+			fallthrough
+		case whoisFormat[0] == "[CTG-CN]":
+			fallthrough
+		case whoisFormat[0] == "[CNC-BACKBONE]":
+			fallthrough
+		case whoisFormat[0] == "[CUG-BACKBONE]":
+			fallthrough
+		case whoisFormat[0] == "[CMIN2-NET]":
+			fallthrough
+		case strings.HasPrefix(res.Hops[ttl][i].Address.String(), "59.43."):
+			line += fmt.Sprintf(Yellow("%s "), fmt.Sprintf("%-18s", displayWhois))
+		default:
+			line += fmt.Sprintf(Green("%s "), fmt.Sprintf("%-18s", displayWhois))
+		}
+		
+		// 处理地理信息（IPv4 和 IPv6 都适用）
+		var parts []string
+		country := res.Hops[ttl][i].Geo.Country
+		prov := res.Hops[ttl][i].Geo.Prov
+		city := res.Hops[ttl][i].Geo.City
+		owner := res.Hops[ttl][i].Geo.Owner
+		if country != "" {
+			parts = append(parts, White(country))
+		}
+		if prov != "" {
+			parts = append(parts, White(prov))
+		}
+		if city != "" {
+			parts = append(parts, White(city))
+		}
+		if owner != "" {
+			parts = append(parts, White(owner))
+		}
+		if len(parts) > 0 {
+			line += strings.Join(parts, ", ")
+		} else {
+			// 如果没有地理信息，显示*
+			line += White("*")
+		}
+		
 		buffer.Add(line)
 	}
 }
