@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,18 +21,49 @@ import (
 
 var lastPrintedStar = false
 
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// stripAnsi 去除字符串中的 ANSI 颜色码
+func stripAnsi(str string) string {
+	return ansiRegex.ReplaceAllString(str, "")
+}
+
+// OutputBuffer 用于缓存路由追踪的输出行
 type OutputBuffer struct {
 	lines []string
 }
 
+// Add 添加一行输出到缓冲区
 func (ob *OutputBuffer) Add(line string) {
 	ob.lines = append(ob.lines, line)
 }
 
+// GetAll 获取所有缓冲的输出行，并合并连续的 * 行
 func (ob *OutputBuffer) GetAll() []string {
-	return ob.lines
+	if len(ob.lines) == 0 {
+		return ob.lines
+	}
+	
+	result := make([]string, 0, len(ob.lines))
+	lastWasStar := false
+	
+	for _, line := range ob.lines {
+		plainText := strings.TrimSpace(stripAnsi(line))
+		if plainText == "*" {
+			if !lastWasStar {
+				result = append(result, line)
+				lastWasStar = true
+			}
+			continue
+		}
+		lastWasStar = false
+		result = append(result, line)
+	}
+	
+	return result
 }
 
+// Clear 清空缓冲区
 func (ob *OutputBuffer) Clear() {
 	ob.lines = nil
 }
@@ -44,14 +76,13 @@ type TraceResult struct {
 	Index    int // 用于保持原始顺序
 }
 
-// realtimePrinter 现在接收 OutputBuffer 参数
+// realtimePrinterWithBuffer 实时打印追踪结果到缓冲区
 func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer) {
 	var latestIP string
 	tmpMap := make(map[string][]string)
-	hasValidData := false // 标记是否有任何有效的数据（包括延迟）
+	hasValidData := false
 	
 	for i, v := range res.Hops[ttl] {
-		// 检查是否有延迟数据
 		if v.RTT > 0 {
 			hasValidData = true
 		}
@@ -60,9 +91,7 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 			tmpMap[latestIP] = append(tmpMap[latestIP], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 			continue
 		} else if v.Address == nil {
-			// 即使没有地址，如果有延迟数据，也应该记录
 			if v.RTT > 0 {
-				// 使用特殊的标记来表示没有IP但有延迟
 				tmpMap["*"] = append(tmpMap["*"], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 			}
 			continue
@@ -79,18 +108,15 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		tmpMap[v.Address.String()] = append(tmpMap[v.Address.String()], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 	}
 	
-	// 如果没有任何有效数据（既没有IP也没有延迟），才打印*
 	if !hasValidData && latestIP == "" {
-		// 如果上一次没有打印*，则打印*，否则跳过
 		if !lastPrintedStar {
 			buffer.Add(White("*"))
 			lastPrintedStar = true
 		}
-		time.Sleep(3 * time.Second) // Wait 3 seconds before retry
+		time.Sleep(3 * time.Second)
 		return
 	}
 	
-	// 重置星号标志，因为这次有实际内容
 	lastPrintedStar = false
 	
 	for ip, v := range tmpMap {
