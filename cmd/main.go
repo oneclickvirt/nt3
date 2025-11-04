@@ -64,13 +64,14 @@ func main() {
 			continue
 		}
 		if result.ISPName == "Error" {
+			// 不要退出程序，仅输出错误信息并继续
 			for _, res := range result.Output {
 				res = strings.TrimSpace(res)
 				if res != "" {
 					fmt.Println(res)
 				}
 			}
-			return
+			continue // 改为continue而不是return
 		}
 		for _, res := range result.Output {
 			res = strings.TrimSpace(res)

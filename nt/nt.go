@@ -226,6 +226,7 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 				InitLogger()
 				Logger.Error(fmt.Sprintf("tracert panic recovered: %v", r))
 			}
+			// 不要让panic导致程序退出，仅记录日志
 		}
 	}()
 	buffer := &OutputBuffer{}
@@ -264,17 +265,43 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 	}
 	// 第一次尝试
 	res, err := trace.Traceroute(f.TracerouteMethod, conf)
-	if err != nil && model.EnableLoger {
-		InitLogger()
-		Logger.Info("trace failed: " + err.Error())
+	if err != nil {
+		errMsg := err.Error()
+		if model.EnableLoger {
+			InitLogger()
+			Logger.Info("tracert IPv4 failed: " + errMsg)
+		}
+		// 检查是否是权限问题
+		if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "operation not permitted") {
+			buffer.Add("Error: Insufficient permissions (try with sudo)")
+			return buffer.GetAll()
+		}
+		// 其他错误只在日志模式下显示
+		if model.EnableLoger {
+			buffer.Add(fmt.Sprintf("Warning: %v", err))
+		}
 	}
 	// 检查结果是否为空或hop长度为0
 	if res == nil || len(res.Hops) == 0 {
-		buffer.Add("\nNo results received, retrying after 3 seconds...")
+		if model.EnableLoger {
+			buffer.Add("No results, retrying...")
+		}
 		time.Sleep(3 * time.Second)
-		_, err = trace.Traceroute(f.TracerouteMethod, conf)
-		if err != nil && model.EnableLoger {
-			Logger.Info("second trace attempt failed: " + err.Error())
+		res, err = trace.Traceroute(f.TracerouteMethod, conf)
+		if err != nil {
+			errMsg := err.Error()
+			if model.EnableLoger {
+				Logger.Info("tracert IPv4 second attempt failed: " + errMsg)
+			}
+			// 第二次尝试失败时也检查权限问题
+			if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "operation not permitted") {
+				buffer.Add("Error: Insufficient permissions (try with sudo)")
+				return buffer.GetAll()
+			}
+		}
+		// 如果第二次尝试后仍然没有结果，只在日志模式下显示
+		if (res == nil || len(res.Hops) == 0) && model.EnableLoger {
+			buffer.Add("Warning: No traceroute results")
 		}
 	}
 	return buffer.GetAll()
@@ -288,6 +315,7 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 				InitLogger()
 				Logger.Error(fmt.Sprintf("tracert_v6 panic recovered: %v", r))
 			}
+			// 不要让panic导致程序退出，仅记录日志
 		}
 	}()
 	buffer := &OutputBuffer{}
@@ -326,17 +354,43 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 	}
 	// 第一次尝试
 	res, err := trace.Traceroute(f.TracerouteMethod, conf)
-	if err != nil && model.EnableLoger {
-		InitLogger()
-		Logger.Info("trace failed: " + err.Error())
+	if err != nil {
+		errMsg := err.Error()
+		if model.EnableLoger {
+			InitLogger()
+			Logger.Info("tracert IPv6 failed: " + errMsg)
+		}
+		// 检查是否是权限问题
+		if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "operation not permitted") {
+			buffer.Add("Error: Insufficient permissions (try with sudo)")
+			return buffer.GetAll()
+		}
+		// 其他错误只在日志模式下显示
+		if model.EnableLoger {
+			buffer.Add(fmt.Sprintf("Warning: %v", err))
+		}
 	}
 	// 检查结果是否为空或hop长度为0
 	if res == nil || len(res.Hops) == 0 {
-		buffer.Add("\nNo results received, retrying after 3 seconds...")
+		if model.EnableLoger {
+			buffer.Add("No results, retrying...")
+		}
 		time.Sleep(3 * time.Second)
-		_, err = trace.Traceroute(f.TracerouteMethod, conf)
-		if err != nil && model.EnableLoger {
-			Logger.Info("second trace attempt failed: " + err.Error())
+		res, err = trace.Traceroute(f.TracerouteMethod, conf)
+		if err != nil {
+			errMsg := err.Error()
+			if model.EnableLoger {
+				Logger.Info("tracert IPv6 second attempt failed: " + errMsg)
+			}
+			// 第二次尝试失败时也检查权限问题
+			if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "operation not permitted") {
+				buffer.Add("Error: Insufficient permissions (try with sudo)")
+				return buffer.GetAll()
+			}
+		}
+		// 如果第二次尝试后仍然没有结果，只在日志模式下显示
+		if (res == nil || len(res.Hops) == 0) && model.EnableLoger {
+			buffer.Add("Warning: No traceroute results")
 		}
 	}
 	return buffer.GetAll()
@@ -350,10 +404,11 @@ func processTarget(ft fastTrace.FastTracer, target fastTrace.ISPCollection, test
 				InitLogger()
 				Logger.Error(fmt.Sprintf("processTarget panic recovered: %v", r))
 			}
+			// 不输出大段内容，只在日志模式下记录
 			resultChan <- TraceResult{
 				ISPName:  target.ISPName,
 				TestType: testType,
-				Output:   []string{fmt.Sprintf("Error: trace for %s panic recovered: %v", target.ISPName, r)},
+				Output:   []string{"Error: Test failed (enable -log for details)"},
 				Index:    index,
 			}
 		}
