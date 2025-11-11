@@ -2,8 +2,6 @@ package nt
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,8 +17,6 @@ import (
 	"github.com/oneclickvirt/nt3/model"
 )
 
-var lastPrintedStar = false
-
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 // stripAnsi 去除字符串中的 ANSI 颜色码
@@ -30,16 +26,23 @@ func stripAnsi(str string) string {
 
 // OutputBuffer 用于缓存路由追踪的输出行
 type OutputBuffer struct {
-	lines []string
+	lines           []string
+	lastPrintedStar bool
+	mu              sync.Mutex
 }
 
 // Add 添加一行输出到缓冲区
 func (ob *OutputBuffer) Add(line string) {
+	ob.mu.Lock()
+	defer ob.mu.Unlock()
 	ob.lines = append(ob.lines, line)
 }
 
 // GetAll 获取所有缓冲的输出行，并合并连续的 * 行
 func (ob *OutputBuffer) GetAll() []string {
+	ob.mu.Lock()
+	defer ob.mu.Unlock()
+	
 	if len(ob.lines) == 0 {
 		return ob.lines
 	}
@@ -65,7 +68,10 @@ func (ob *OutputBuffer) GetAll() []string {
 
 // Clear 清空缓冲区
 func (ob *OutputBuffer) Clear() {
+	ob.mu.Lock()
+	defer ob.mu.Unlock()
 	ob.lines = nil
+	ob.lastPrintedStar = false
 }
 
 // TraceResult 包含追踪结果和目标信息
@@ -109,15 +115,19 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 	}
 	
 	if !hasValidData && latestIP == "" {
-		if !lastPrintedStar {
-			buffer.Add(White("*"))
-			lastPrintedStar = true
+		buffer.mu.Lock()
+		if !buffer.lastPrintedStar {
+			buffer.lines = append(buffer.lines, White("*"))
+			buffer.lastPrintedStar = true
 		}
+		buffer.mu.Unlock()
 		time.Sleep(3 * time.Second)
 		return
 	}
 	
-	lastPrintedStar = false
+	buffer.mu.Lock()
+	buffer.lastPrintedStar = false
+	buffer.mu.Unlock()
 	
 	for ip, v := range tmpMap {
 		// 处理没有IP但有延迟的情况
@@ -230,8 +240,6 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 		}
 	}()
 	buffer := &OutputBuffer{}
-	// 重置星号标志
-	lastPrintedStar = false
 	buffer.Add(fmt.Sprintf("traceroute to %s, %d hops max, %d byte packets", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize))
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	if err != nil {
@@ -267,17 +275,15 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 	res, err := trace.Traceroute(f.TracerouteMethod, conf)
 	if err != nil {
 		errMsg := err.Error()
-		if model.EnableLoger {
-			InitLogger()
-			Logger.Info("tracert IPv4 failed: " + errMsg)
-		}
-		// 检查是否是权限问题
+		// 检查是否是权限问题，权限问题不输出日志
 		if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "operation not permitted") {
 			buffer.Add("Error: Insufficient permissions (try with sudo)")
 			return buffer.GetAll()
 		}
 		// 其他错误只在日志模式下显示
 		if model.EnableLoger {
+			InitLogger()
+			Logger.Info("tracert IPv4 failed: " + errMsg)
 			buffer.Add(fmt.Sprintf("Warning: %v", err))
 		}
 	}
@@ -290,13 +296,13 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 		res, err = trace.Traceroute(f.TracerouteMethod, conf)
 		if err != nil {
 			errMsg := err.Error()
-			if model.EnableLoger {
-				Logger.Info("tracert IPv4 second attempt failed: " + errMsg)
-			}
-			// 第二次尝试失败时也检查权限问题
+			// 第二次尝试失败时也检查权限问题，不输出日志
 			if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "operation not permitted") {
 				buffer.Add("Error: Insufficient permissions (try with sudo)")
 				return buffer.GetAll()
+			}
+			if model.EnableLoger {
+				Logger.Info("tracert IPv4 second attempt failed: " + errMsg)
 			}
 		}
 		// 如果第二次尝试后仍然没有结果，只在日志模式下显示
@@ -319,8 +325,6 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 		}
 	}()
 	buffer := &OutputBuffer{}
-	// 重置星号标志
-	lastPrintedStar = false
 	buffer.Add(fmt.Sprintf("traceroute to %s, %d hops max, %d byte packets", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize))
 	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	if err != nil {
@@ -356,17 +360,15 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 	res, err := trace.Traceroute(f.TracerouteMethod, conf)
 	if err != nil {
 		errMsg := err.Error()
-		if model.EnableLoger {
-			InitLogger()
-			Logger.Info("tracert IPv6 failed: " + errMsg)
-		}
-		// 检查是否是权限问题
+		// 检查是否是权限问题，权限问题不输出日志
 		if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "operation not permitted") {
 			buffer.Add("Error: Insufficient permissions (try with sudo)")
 			return buffer.GetAll()
 		}
 		// 其他错误只在日志模式下显示
 		if model.EnableLoger {
+			InitLogger()
+			Logger.Info("tracert IPv6 failed: " + errMsg)
 			buffer.Add(fmt.Sprintf("Warning: %v", err))
 		}
 	}
@@ -379,13 +381,13 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 		res, err = trace.Traceroute(f.TracerouteMethod, conf)
 		if err != nil {
 			errMsg := err.Error()
-			if model.EnableLoger {
-				Logger.Info("tracert IPv6 second attempt failed: " + errMsg)
-			}
-			// 第二次尝试失败时也检查权限问题
+			// 第二次尝试失败时也检查权限问题，不输出日志
 			if strings.Contains(errMsg, "permission") || strings.Contains(errMsg, "operation not permitted") {
 				buffer.Add("Error: Insufficient permissions (try with sudo)")
 				return buffer.GetAll()
+			}
+			if model.EnableLoger {
+				Logger.Info("tracert IPv6 second attempt failed: " + errMsg)
 			}
 		}
 		// 如果第二次尝试后仍然没有结果，只在日志模式下显示
@@ -498,9 +500,11 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		PktSize:        52,
 	}
 	ft := fastTrace.FastTracer{ParamsFastTrace: pFastTrace}
-	wsHandle := wshandle.New() // 官方有输出重定向，待修复
-	wsHandle.Interrupt = make(chan os.Signal, 1)
-	signal.Notify(wsHandle.Interrupt, os.Interrupt)
+	// 创建 wsHandle（内部会启动 goroutine）
+	// 注意：不设置 Interrupt 字段以避免数据竞争
+	// wshandle 库内部的 goroutine 会在启动时读取 Interrupt 字段
+	// 如果在 New() 之后设置会导致数据竞争
+	wsHandle := wshandle.New()
 	defer func() {
 		if wsHandle.Conn != nil {
 			wsHandle.Conn.Close()
