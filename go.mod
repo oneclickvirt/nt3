@@ -3,7 +3,7 @@ module github.com/oneclickvirt/nt3
 go 1.25.3
 
 require (
-	github.com/nxtrace/NTrace-core v1.4.3-rc.1
+	github.com/nxtrace/NTrace-core v1.5.0
 	github.com/oneclickvirt/defaultset v0.0.2-20240624082446
 )
 
