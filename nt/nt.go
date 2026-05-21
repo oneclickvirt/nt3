@@ -84,11 +84,34 @@ type TraceResult struct {
 
 // realtimePrinterWithBuffer 实时打印追踪结果到缓冲区
 func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer) {
+	if buffer == nil {
+		return
+	}
+	if res == nil || ttl < 0 || ttl >= len(res.Hops) {
+		buffer.mu.Lock()
+		if !buffer.lastPrintedStar {
+			buffer.lines = append(buffer.lines, White("*"))
+			buffer.lastPrintedStar = true
+		}
+		buffer.mu.Unlock()
+		return
+	}
+	hops := res.Hops[ttl]
+	if len(hops) == 0 {
+		buffer.mu.Lock()
+		if !buffer.lastPrintedStar {
+			buffer.lines = append(buffer.lines, White("*"))
+			buffer.lastPrintedStar = true
+		}
+		buffer.mu.Unlock()
+		return
+	}
+
 	var latestIP string
 	tmpMap := make(map[string][]string)
 	hasValidData := false
 	
-	for i, v := range res.Hops[ttl] {
+	for i, v := range hops {
 		if v.RTT > 0 {
 			hasValidData = true
 		}
@@ -102,16 +125,17 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 			}
 			continue
 		}
-		if _, exist := tmpMap[v.Address.String()]; !exist {
-			tmpMap[v.Address.String()] = append(tmpMap[v.Address.String()], strconv.Itoa(i))
+		addr := v.Address.String()
+		if _, exist := tmpMap[addr]; !exist {
+			tmpMap[addr] = append(tmpMap[addr], strconv.Itoa(i))
 			if latestIP == "" {
 				for j := 0; j < i; j++ {
-					tmpMap[v.Address.String()] = append(tmpMap[v.Address.String()], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
+					tmpMap[addr] = append(tmpMap[addr], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 				}
 			}
-			latestIP = v.Address.String()
+			latestIP = addr
 		}
-		tmpMap[v.Address.String()] = append(tmpMap[v.Address.String()], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
+		tmpMap[addr] = append(tmpMap[addr], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 	}
 	
 	if !hasValidData && latestIP == "" {
@@ -144,18 +168,32 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 			continue
 		}
 		
+		if len(v) == 0 {
+			continue
+		}
 		i, _ := strconv.Atoi(v[0])
-		rtt := v[1]
+		rtt := "*"
+		if len(v) > 1 {
+			rtt = v[1]
+		}
 		line := ""
 		line += fmt.Sprintf(Cyan("%-12s "), rtt)
-		if res.Hops[ttl][i].Geo.Asnumber != "" {
-			line += fmt.Sprintf(Yellow("%-10s "), fmt.Sprintf("AS%s", res.Hops[ttl][i].Geo.Asnumber))
+		if i < 0 || i >= len(hops) {
+			line += fmt.Sprintf(White("%-10s "), "*")
+			line += fmt.Sprintf(White("%-18s "), "*")
+			line += White("*")
+			buffer.Add(line)
+			continue
+		}
+		hop := hops[i]
+		if hop.Geo.Asnumber != "" {
+			line += fmt.Sprintf(Yellow("%-10s "), fmt.Sprintf("AS%s", hop.Geo.Asnumber))
 		} else {
 			line += fmt.Sprintf(White("%-10s "), "*")
 		}
 		
 		// 处理 Whois 信息（IPv4 和 IPv6 都适用）
-		whoisFormat := strings.Split(res.Hops[ttl][i].Geo.Whois, "-")
+		whoisFormat := strings.Split(hop.Geo.Whois, "-")
 		if len(whoisFormat) > 1 {
 			whoisFormat[0] = strings.Join(whoisFormat[:2], "-")
 		}
@@ -175,15 +213,15 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		
 		// 根据 AS 号或 Whois 信息决定颜色（IPv4 和 IPv6 都适用）
 		switch {
-		case res.Hops[ttl][i].Geo.Asnumber == "58807":
+		case hop.Geo.Asnumber == "58807":
 			fallthrough
-		case res.Hops[ttl][i].Geo.Asnumber == "10099":
+		case hop.Geo.Asnumber == "10099":
 			fallthrough
-		case res.Hops[ttl][i].Geo.Asnumber == "4809":
+		case hop.Geo.Asnumber == "4809":
 			fallthrough
-		case res.Hops[ttl][i].Geo.Asnumber == "9929":
+		case hop.Geo.Asnumber == "9929":
 			fallthrough
-		case res.Hops[ttl][i].Geo.Asnumber == "23764":
+		case hop.Geo.Asnumber == "23764":
 			fallthrough
 		case whoisFormat[0] == "[CTG-CN]":
 			fallthrough
@@ -193,7 +231,7 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 			fallthrough
 		case whoisFormat[0] == "[CMIN2-NET]":
 			fallthrough
-		case strings.HasPrefix(res.Hops[ttl][i].Address.String(), "59.43."):
+		case hop.Address != nil && strings.HasPrefix(hop.Address.String(), "59.43."):
 			line += fmt.Sprintf(Yellow("%s "), fmt.Sprintf("%-18s", displayWhois))
 		default:
 			line += fmt.Sprintf(Green("%s "), fmt.Sprintf("%-18s", displayWhois))
@@ -201,10 +239,10 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		
 		// 处理地理信息（IPv4 和 IPv6 都适用）
 		var parts []string
-		country := res.Hops[ttl][i].Geo.Country
-		prov := res.Hops[ttl][i].Geo.Prov
-		city := res.Hops[ttl][i].Geo.City
-		owner := res.Hops[ttl][i].Geo.Owner
+		country := hop.Geo.Country
+		prov := hop.Geo.Prov
+		city := hop.Geo.City
+		owner := hop.Geo.Owner
 		if country != "" {
 			parts = append(parts, White(country))
 		}
@@ -533,7 +571,12 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}()
 		batchResults := make([]TraceResult, end-i)
 		for result := range batchResultChan {
-			batchResults[result.Index-i] = result
+			pos := result.Index - i
+			if pos >= 0 && pos < len(batchResults) {
+				batchResults[pos] = result
+				continue
+			}
+			resultChan <- result
 		}
 		for _, result := range batchResults {
 			resultChan <- result
