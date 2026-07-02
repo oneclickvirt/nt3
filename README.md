@@ -67,7 +67,7 @@ rm -rf /usr/bin/nt3
 ## 在Golang中使用
 
 ```
-go get github.com/oneclickvirt/nt3@v0.0.13-20260521161120
+go get github.com/oneclickvirt/nt3@v0.0.14-20260702203359
 ```
 
 ## 示例图
