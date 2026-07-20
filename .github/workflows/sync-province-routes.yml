@@ -1,0 +1,39 @@
+name: Sync province route registry
+
+on:
+  schedule:
+    - cron: "43 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nt3-province-route-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Update embedded province routes
+        run: go run ./cmd/update-province-routes -output model/snapshot/province-routes.json
+      - name: Verify snapshot
+        run: |
+          go test -race ./...
+          go vet ./...
+          git diff --check
+      - name: Commit semantic changes
+        run: |
+          if [[ -z "$(git status --porcelain -- model/snapshot/province-routes.json)" ]]; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add model/snapshot/province-routes.json
+          git commit -m "chore: sync province route registry"
+          git push
