@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -19,15 +21,17 @@ import (
 const defaultSourceURL = "https://raw.githubusercontent.com/xykt/NetQuality/main/ref/province.json"
 
 type updateConfig struct {
-	Source  string
-	Output  string
-	Timeout time.Duration
+	Source   string
+	Output   string
+	Manifest string
+	Timeout  time.Duration
 }
 
 func main() {
 	config := updateConfig{}
 	flag.StringVar(&config.Source, "source", defaultSourceURL, "upstream province metadata URL")
 	flag.StringVar(&config.Output, "output", "model/snapshot/province-routes.json", "snapshot output path")
+	flag.StringVar(&config.Manifest, "manifest", "model/snapshot/manifest.json", "snapshot manifest output path")
 	flag.DurationVar(&config.Timeout, "timeout", 30*time.Second, "upstream request timeout")
 	flag.Parse()
 	if err := updateSnapshot(context.Background(), http.DefaultClient, config); err != nil {
@@ -84,18 +88,64 @@ func updateSnapshot(ctx context.Context, client *http.Client, config updateConfi
 	if err != nil {
 		return err
 	}
-	current, readErr := os.ReadFile(config.Output)
+	return replaceSnapshot(config.Output, config.Manifest, candidate)
+}
+
+type snapshotManifest struct {
+	Schema      string `json:"schema"`
+	File        string `json:"file"`
+	Count       int    `json:"count"`
+	SHA256      string `json:"sha256"`
+	GeneratedAt string `json:"generated_at"`
+}
+
+func replaceSnapshot(output, manifestOutput string, candidate []byte) error {
+	routes, err := model.ParseProvinceRoutes(candidate)
+	if err != nil {
+		return err
+	}
+	hash := sha256.Sum256(candidate)
+	manifest := snapshotManifest{Schema: model.ProvinceRouteRegistrySchema, File: filepath.Base(output), Count: len(routes), SHA256: hex.EncodeToString(hash[:]), GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
+	manifestData, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
+	manifestData = append(manifestData, '\n')
+	current, readErr := os.ReadFile(output)
 	if readErr == nil {
-		if normalized, normalizeErr := model.NormalizeProvinceRouteSnapshot(current); normalizeErr == nil && bytes.Equal(normalized, candidate) {
+		if normalized, normalizeErr := model.NormalizeProvinceRouteSnapshot(current); normalizeErr == nil && bytes.Equal(normalized, candidate) && manifestMatches(manifestOutput, candidate, len(routes)) {
 			return nil
 		}
 	} else if !errors.Is(readErr, os.ErrNotExist) {
 		return fmt.Errorf("read existing snapshot: %w", readErr)
 	}
-	if err := os.MkdirAll(filepath.Dir(config.Output), 0o755); err != nil {
+	if err := writeAtomicSnapshot(output, candidate); err != nil {
 		return err
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(config.Output), ".province-routes-*")
+	return writeAtomicSnapshot(manifestOutput, manifestData)
+}
+
+func manifestMatches(path string, snapshot []byte, count int) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var manifest snapshotManifest
+	if json.Unmarshal(data, &manifest) != nil || manifest.Schema != model.ProvinceRouteRegistrySchema || manifest.File != "province-routes.json" || manifest.Count != count {
+		return false
+	}
+	hash := sha256.Sum256(snapshot)
+	return manifest.SHA256 == hex.EncodeToString(hash[:])
+}
+
+func writeAtomicSnapshot(output string, data []byte) error {
+	if output == "" {
+		return errors.New("snapshot path is empty")
+	}
+	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(output), ".province-routes-*")
 	if err != nil {
 		return err
 	}
@@ -105,7 +155,7 @@ func updateSnapshot(ctx context.Context, client *http.Client, config updateConfi
 		_ = temporary.Close()
 		return err
 	}
-	if _, err := temporary.Write(candidate); err != nil {
+	if _, err := temporary.Write(data); err != nil {
 		_ = temporary.Close()
 		return err
 	}
@@ -116,5 +166,5 @@ func updateSnapshot(ctx context.Context, client *http.Client, config updateConfi
 	if err := temporary.Close(); err != nil {
 		return err
 	}
-	return os.Rename(temporaryName, config.Output)
+	return os.Rename(temporaryName, output)
 }

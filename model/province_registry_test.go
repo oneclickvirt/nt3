@@ -2,10 +2,14 @@ package model
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestBuildProvinceRoutesFromMetadata(t *testing.T) {
@@ -26,6 +30,36 @@ func TestBuildProvinceRoutesFromMetadata(t *testing.T) {
 	}
 	if len(routes) != ProvinceRouteCount || routes[0].Targets[0].IPv4 != "bj-ct-v4.ip.zstaticcdn.com" {
 		t.Fatalf("unexpected routes: len=%d first=%+v", len(routes), routes[0])
+	}
+}
+
+func TestLoadProvinceRoutesRejectsBadManifestAndUsesNextSource(t *testing.T) {
+	data, err := json.Marshal(validProvinceRoutes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256(data)
+	manifest := ProvinceRouteManifest{Schema: ProvinceRouteRegistrySchema, File: "province-routes.json", Count: ProvinceRouteCount, SHA256: hex.EncodeToString(hash[:]), GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
+	manifestData, _ := json.Marshal(manifest)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/cdn-manifest":
+			bad := manifest
+			bad.SHA256 = strings.Repeat("0", 64)
+			_ = json.NewEncoder(writer).Encode(bad)
+		case "/raw-manifest":
+			_, _ = writer.Write(manifestData)
+		default:
+			_, _ = writer.Write(data)
+		}
+	}))
+	defer server.Close()
+	loaded, err := LoadProvinceRoutes(context.Background(), server.Client(), []ProvinceRouteRegistrySource{
+		{Name: "cdn", URL: server.URL + "/cdn-data", ManifestURL: server.URL + "/cdn-manifest"},
+		{Name: "raw", URL: server.URL + "/raw-data", ManifestURL: server.URL + "/raw-manifest"},
+	})
+	if err != nil || loaded.Source != "raw" || !loaded.Fallback {
+		t.Fatalf("unexpected manifest fallback: %+v, %v", loaded, err)
 	}
 }
 
