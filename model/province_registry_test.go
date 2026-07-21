@@ -61,6 +61,9 @@ func TestLoadProvinceRoutesRejectsBadManifestAndUsesNextSource(t *testing.T) {
 	if err != nil || loaded.Source != "raw" || !loaded.Fallback {
 		t.Fatalf("unexpected manifest fallback: %+v, %v", loaded, err)
 	}
+	if loaded.Metadata.Schema != ProvinceRouteRegistrySchema || loaded.Metadata.Count != ProvinceRouteCount || loaded.Metadata.SHA256 != manifest.SHA256 {
+		t.Fatalf("manifest metadata missing: %+v", loaded.Metadata)
+	}
 }
 
 func TestLoadProvinceRoutesFallsBackToRawAndEmbedded(t *testing.T) {
@@ -82,5 +85,15 @@ func TestLoadProvinceRoutesFallsBackToRawAndEmbedded(t *testing.T) {
 	})
 	if err != nil || loaded.Source != "raw" || !loaded.Fallback || len(loaded.Routes) != ProvinceRouteCount {
 		t.Fatalf("unexpected load: %+v, %v", loaded, err)
+	}
+}
+
+func TestLoadProvinceRoutesReturnsEmbeddedMetadata(t *testing.T) {
+	loaded, err := LoadProvinceRoutes(context.Background(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Source != "embedded" || !loaded.Fallback || loaded.Metadata.Schema != ProvinceRouteRegistrySchema || loaded.Metadata.Count != len(loaded.Routes) || loaded.Metadata.GeneratedAt == "" || len(loaded.Metadata.SHA256) != 64 {
+		t.Fatalf("unexpected embedded metadata: %+v", loaded)
 	}
 }

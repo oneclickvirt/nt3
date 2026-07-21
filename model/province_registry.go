@@ -40,6 +40,14 @@ type ProvinceRouteRegistryLoadResult struct {
 	Routes   []ProvinceRoute
 	Source   string
 	Fallback bool
+	Metadata RegistryMetadata
+}
+
+type RegistryMetadata struct {
+	Schema      string `json:"schema"`
+	Count       int    `json:"count"`
+	SHA256      string `json:"sha256"`
+	GeneratedAt string `json:"generated_at,omitempty"`
 }
 
 func DefaultProvinceRouteRegistrySources() []ProvinceRouteRegistrySource {
@@ -78,7 +86,7 @@ func LoadProvinceRoutes(ctx context.Context, client *http.Client, sources []Prov
 	}
 	var lastErr error
 	for index, source := range sources {
-		data, err := loadProvinceRouteSnapshot(ctx, client, source)
+		data, metadata, err := loadProvinceRouteSnapshot(ctx, client, source)
 		if err != nil {
 			lastErr = fmt.Errorf("load %s province routes: %w", source.Name, err)
 			continue
@@ -88,14 +96,18 @@ func LoadProvinceRoutes(ctx context.Context, client *http.Client, sources []Prov
 			lastErr = fmt.Errorf("validate %s province routes: %w", source.Name, err)
 			continue
 		}
-		return ProvinceRouteRegistryLoadResult{Routes: routes, Source: source.Name, Fallback: index > 0}, nil
+		if metadata.Count == 0 {
+			metadata = provinceRouteRegistryMetadata(data, routes)
+		}
+		return ProvinceRouteRegistryLoadResult{Routes: routes, Source: source.Name, Fallback: index > 0, Metadata: metadata}, nil
 	}
-	if err := validateProvinceRouteManifest(embeddedProvinceRouteManifest, embeddedProvinceRoutes); err != nil {
+	metadata, err := validateProvinceRouteManifest(embeddedProvinceRouteManifest, embeddedProvinceRoutes)
+	if err != nil {
 		return ProvinceRouteRegistryLoadResult{}, fmt.Errorf("validate embedded province route manifest: %w", err)
 	}
 	routes, err := ParseProvinceRoutes(embeddedProvinceRoutes)
 	if err == nil {
-		return ProvinceRouteRegistryLoadResult{Routes: routes, Source: "embedded", Fallback: true}, nil
+		return ProvinceRouteRegistryLoadResult{Routes: routes, Source: "embedded", Fallback: true, Metadata: metadata}, nil
 	}
 	if lastErr == nil {
 		lastErr = errors.New("no province route registry sources configured")
@@ -103,52 +115,59 @@ func LoadProvinceRoutes(ctx context.Context, client *http.Client, sources []Prov
 	return ProvinceRouteRegistryLoadResult{}, fmt.Errorf("%w; embedded fallback: %v", lastErr, err)
 }
 
-func loadProvinceRouteSnapshot(ctx context.Context, client *http.Client, source ProvinceRouteRegistrySource) ([]byte, error) {
+func loadProvinceRouteSnapshot(ctx context.Context, client *http.Client, source ProvinceRouteRegistrySource) ([]byte, RegistryMetadata, error) {
 	if source.ManifestURL == "" {
-		return fetchProvinceRouteSnapshot(ctx, client, source.URL)
+		data, err := fetchProvinceRouteSnapshot(ctx, client, source.URL)
+		return data, RegistryMetadata{}, err
 	}
 	manifestData, err := fetchProvinceRouteSnapshot(ctx, client, source.ManifestURL)
 	if err != nil {
-		return nil, fmt.Errorf("load manifest: %w", err)
+		return nil, RegistryMetadata{}, fmt.Errorf("load manifest: %w", err)
 	}
 	data, err := fetchProvinceRouteSnapshot(ctx, client, source.URL)
 	if err != nil {
-		return nil, err
+		return nil, RegistryMetadata{}, err
 	}
-	if err := validateProvinceRouteManifest(manifestData, data); err != nil {
-		return nil, err
+	metadata, err := validateProvinceRouteManifest(manifestData, data)
+	if err != nil {
+		return nil, RegistryMetadata{}, err
 	}
-	return data, nil
+	return data, metadata, nil
 }
 
-func validateProvinceRouteManifest(data, snapshot []byte) error {
+func validateProvinceRouteManifest(data, snapshot []byte) (RegistryMetadata, error) {
 	var manifest ProvinceRouteManifest
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&manifest); err != nil {
-		return fmt.Errorf("decode manifest: %w", err)
+		return RegistryMetadata{}, fmt.Errorf("decode manifest: %w", err)
 	}
 	if err := ensureJSONEOF(decoder); err != nil {
-		return err
+		return RegistryMetadata{}, err
 	}
 	if manifest.Schema != ProvinceRouteRegistrySchema || manifest.File != "province-routes.json" || manifest.Count < 1 {
-		return errors.New("manifest schema, file, or count is invalid")
+		return RegistryMetadata{}, errors.New("manifest schema, file, or count is invalid")
 	}
 	if _, err := time.Parse(time.RFC3339, manifest.GeneratedAt); err != nil {
-		return fmt.Errorf("manifest generated_at is invalid: %w", err)
+		return RegistryMetadata{}, fmt.Errorf("manifest generated_at is invalid: %w", err)
 	}
 	hash := sha256.Sum256(snapshot)
 	if !strings.EqualFold(manifest.SHA256, hex.EncodeToString(hash[:])) {
-		return errors.New("manifest SHA-256 does not match snapshot")
+		return RegistryMetadata{}, errors.New("manifest SHA-256 does not match snapshot")
 	}
 	routes, err := ParseProvinceRoutes(snapshot)
 	if err != nil {
-		return fmt.Errorf("manifest snapshot validation failed: %w", err)
+		return RegistryMetadata{}, fmt.Errorf("manifest snapshot validation failed: %w", err)
 	}
 	if len(routes) != manifest.Count {
-		return fmt.Errorf("manifest count %d does not match snapshot count %d", manifest.Count, len(routes))
+		return RegistryMetadata{}, fmt.Errorf("manifest count %d does not match snapshot count %d", manifest.Count, len(routes))
 	}
-	return nil
+	return RegistryMetadata{Schema: manifest.Schema, Count: manifest.Count, SHA256: strings.ToLower(manifest.SHA256), GeneratedAt: manifest.GeneratedAt}, nil
+}
+
+func provinceRouteRegistryMetadata(snapshot []byte, routes []ProvinceRoute) RegistryMetadata {
+	hash := sha256.Sum256(snapshot)
+	return RegistryMetadata{Schema: ProvinceRouteRegistrySchema, Count: len(routes), SHA256: hex.EncodeToString(hash[:])}
 }
 
 func fetchProvinceRouteSnapshot(ctx context.Context, client *http.Client, endpoint string) ([]byte, error) {
