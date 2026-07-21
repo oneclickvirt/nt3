@@ -42,7 +42,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -count=1 ./...
+          test_log="$(mktemp)"
+          trap 'rm -f "$test_log"' EXIT
+          if ! go test -race -count=1 ./... 2>&1 | tee "$test_log"; then
+            message="$(tail -n 120 "$test_log")"
+            message="${message//'%'/'%25'}"
+            message="${message//$'\r'/'%0D'}"
+            message="${message//$'\n'/'%0A'}"
+            echo "::error title=Go race tests failed::${message}"
+            exit 1
+          fi
       - name: Vet snapshot
         shell: bash
         run: |
