@@ -286,7 +286,7 @@ func provinceLatencyPercentile(values []time.Duration, quantile float64) time.Du
 		return values[lower]
 	}
 	weight := position - float64(lower)
-	return time.Duration(float64(values[lower])*(1-weight) + float64(values[upper])*weight)
+	return time.Duration(math.Round(float64(values[lower])*(1-weight) + float64(values[upper])*weight))
 }
 
 func classifyProvinceLatencyError(err error) string {
