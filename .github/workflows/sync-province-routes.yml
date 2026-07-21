@@ -4,6 +4,19 @@ on:
   schedule:
     - cron: "43 3 * * *"
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/sync-province-routes.yml"
+      - "cmd/update-province-routes/**"
+      - "model/snapshot/**"
+      - "model/province.go"
+      - "model/province_registry.go"
+      - "model/province_registry_test.go"
+      - "model/province_test.go"
+      - "go.mod"
+      - "go.sum"
 
 permissions:
   contents: write
@@ -21,14 +34,29 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Update embedded province routes
-        run: go run ./cmd/update-province-routes -output model/snapshot/province-routes.json -manifest model/snapshot/manifest.json
-      - name: Verify snapshot
+        shell: bash
         run: |
-          go test -race ./...
+          set -euo pipefail
+          go run ./cmd/update-province-routes -output model/snapshot/province-routes.json -manifest model/snapshot/manifest.json
+      - name: Test snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -race -count=1 ./...
+      - name: Vet snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
           go vet ./...
+      - name: Check snapshot diff
+        shell: bash
+        run: |
+          set -euo pipefail
           git diff --check
       - name: Commit semantic changes
+        shell: bash
         run: |
+          set -euo pipefail
           if [[ -z "$(git status --porcelain -- model/snapshot/province-routes.json model/snapshot/manifest.json)" ]]; then
             exit 0
           fi
