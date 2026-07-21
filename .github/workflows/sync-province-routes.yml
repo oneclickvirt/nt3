@@ -11,6 +11,7 @@ on:
       - ".github/workflows/sync-province-routes.yml"
       - "cmd/update-province-routes/**"
       - "model/snapshot/**"
+      - "model/model.go"
       - "model/province.go"
       - "model/province_registry.go"
       - "model/province_registry_test.go"
