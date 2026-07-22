@@ -59,7 +59,7 @@ func main() {
 		fmt.Println("Repo:", "https://github.com/oneclickvirt/nt3")
 	}
 	if actionErr != nil {
-		fmt.Fprintln(os.Stderr, actionErr)
+		fmt.Fprintln(os.Stderr, sanitizeErrorText(actionErr.Error()))
 		return
 	}
 	if action == cliHelp {
@@ -74,7 +74,7 @@ func main() {
 	}
 	if action == cliProvince {
 		if err := runProvinceMode(context.Background(), os.Stdout, provinceTargets, provinceIP, provinceAttempts, provinceTimeout, provinceConcurrency, provincePort, deep, provinceJSON, provinceRegistry); err != nil {
-			fmt.Fprintf(os.Stderr, "province mode failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "province mode failed: %s\n", sanitizeErrorText(err.Error()))
 			return
 		}
 		return
@@ -102,7 +102,7 @@ func main() {
 			for index, res := range result.Output {
 				res = strings.TrimSpace(res)
 				if res != "" && index == 0 {
-					fmt.Println(res)
+					fmt.Println(indentLegacyOutput(res))
 				}
 			}
 			continue
@@ -112,7 +112,7 @@ func main() {
 			for _, res := range result.Output {
 				res = strings.TrimSpace(res)
 				if res != "" {
-					fmt.Println(res)
+					fmt.Println(indentLegacyOutput(res))
 				}
 			}
 			continue // 改为continue而不是return
@@ -123,9 +123,9 @@ func main() {
 				continue
 			}
 			if strings.Contains(res, "ICMP") {
-				fmt.Print(res)
+				fmt.Print(indentLegacyOutput(res))
 			} else {
-				fmt.Println(res)
+				fmt.Println(indentLegacyOutput(res))
 			}
 		}
 	}
@@ -225,11 +225,11 @@ func runProvinceMode(ctx context.Context, output io.Writer, spec, ipVersion stri
 			return json.NewEncoder(output).Encode(results)
 		}
 		for _, result := range results {
-			fmt.Fprintf(output, "%s/%s/%s %s hops=%d", result.Target.ProvinceCode, result.Target.Carrier, result.Target.IPVersion, result.Status, len(result.Hops))
+			line := fmt.Sprintf("%s/%s/%s %s hops=%d", result.Target.ProvinceCode, result.Target.Carrier, result.Target.IPVersion, result.Status, len(result.Hops))
 			if result.Error != "" {
-				fmt.Fprintf(output, " error=%s", result.Error)
+				line += " error=" + sanitizeErrorText(result.Error)
 			}
-			fmt.Fprintln(output)
+			fmt.Fprintln(output, indentLegacyOutput(line))
 		}
 		return nil
 	}
@@ -237,9 +237,10 @@ func runProvinceMode(ctx context.Context, output io.Writer, spec, ipVersion stri
 	if jsonOutput {
 		return json.NewEncoder(output).Encode(results)
 	}
-	fmt.Fprintln(output, "目标\t成功\t丢包\t平均\tP95")
+	fmt.Fprintln(output, indentLegacyOutput("目标\t成功\t丢包\t平均\tP95"))
 	for _, result := range results {
-		fmt.Fprintf(output, "%s/%s/%s\t%d/%d\t%.1f%%\t%s\t%s\n", result.Target.ProvinceCode, result.Target.Carrier, result.Target.IPVersion, result.Successful, result.Attempts, result.LossPercent, result.Mean, result.P95)
+		line := fmt.Sprintf("%s/%s/%s\t%d/%d\t%.1f%%\t%s\t%s", result.Target.ProvinceCode, result.Target.Carrier, result.Target.IPVersion, result.Successful, result.Attempts, result.LossPercent, result.Mean, result.P95)
+		fmt.Fprintln(output, indentLegacyOutput(line))
 	}
 	return nil
 }
