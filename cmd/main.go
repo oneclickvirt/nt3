@@ -54,13 +54,16 @@ func main() {
 	if err := nt3Flag.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
 	}
+	visited := make(map[string]bool)
+	nt3Flag.Visit(func(current *flag.Flag) { visited[current.Name] = true })
+	language, checkType, location = normalizeLegacyOptions(language, checkType, location)
 	action, actionErr := selectCLIAction(help, showVersion, provinceJSON, deep, provinceTargets, provinceRegistry)
 	if !(action == cliProvince && provinceJSON) {
 		fmt.Println("Repo:", "https://github.com/oneclickvirt/nt3")
 	}
 	if actionErr != nil {
 		fmt.Fprintln(os.Stderr, sanitizeErrorText(actionErr.Error()))
-		return
+		os.Exit(2)
 	}
 	if action == cliHelp {
 		fmt.Printf("Usage: %s [options]\n", os.Args[0])
@@ -72,24 +75,16 @@ func main() {
 		fmt.Println(model.NextTraceVersion)
 		return
 	}
+	if err := validateCLIOptions(nt3Flag.Args(), language, checkType, location, provinceTargets, provinceIP, provinceAttempts, provinceTimeout, provinceConcurrency, provincePort, deep, provinceJSON, provinceRegistry, visited); err != nil {
+		fmt.Fprintln(os.Stderr, sanitizeErrorText(err.Error()))
+		os.Exit(2)
+	}
 	if action == cliProvince {
 		if err := runProvinceMode(context.Background(), os.Stdout, provinceTargets, provinceIP, provinceAttempts, provinceTimeout, provinceConcurrency, provincePort, deep, provinceJSON, provinceRegistry); err != nil {
 			fmt.Fprintf(os.Stderr, "province mode failed: %s\n", sanitizeErrorText(err.Error()))
-			return
+			os.Exit(1)
 		}
 		return
-	}
-	if language == "" {
-		language = "zh"
-	} else {
-		language = strings.ToLower(language)
-	}
-	if checkType == "" || checkType == "ipv4" {
-		checkType = "ipv4"
-	} else if strings.ToLower(checkType) == "both" {
-		checkType = "both"
-	} else if strings.ToLower(checkType) == "ipv6" {
-		checkType = "ipv6"
 	}
 	// 创建结果通道
 	resultChan := make(chan nt.TraceResult, 100) // 使用缓冲通道
@@ -129,6 +124,70 @@ func main() {
 			}
 		}
 	}
+}
+
+func normalizeLegacyOptions(language, checkType, location string) (string, string, string) {
+	language = strings.ToLower(strings.TrimSpace(language))
+	if language == "" {
+		language = "zh"
+	}
+	checkType = strings.ToLower(strings.TrimSpace(checkType))
+	if checkType == "" {
+		checkType = "ipv4"
+	}
+	location = strings.ToUpper(strings.TrimSpace(location))
+	if location == "" {
+		location = "GZ"
+	}
+	return language, checkType, location
+}
+
+func validateCLIOptions(positional []string, language, checkType, location, provinceTargets, provinceIP string, attempts int, timeout time.Duration, concurrency, port int, deep, provinceJSON, provinceRegistry bool, visited map[string]bool) error {
+	if len(positional) != 0 {
+		return fmt.Errorf("unexpected positional arguments: %s", strings.Join(positional, " "))
+	}
+	if language != "zh" && language != "en" {
+		return fmt.Errorf("-l only supports zh or en")
+	}
+	if checkType != "ipv4" && checkType != "ipv6" && checkType != "both" {
+		return fmt.Errorf("-c only supports ipv4, ipv6, or both")
+	}
+	switch location {
+	case "GZ", "BJ", "SH", "CD", "ALL":
+	default:
+		return fmt.Errorf("-loc only supports GZ, BJ, SH, CD, or ALL")
+	}
+	provinceIP = strings.ToLower(strings.TrimSpace(provinceIP))
+	if provinceIP != "ipv4" && provinceIP != "ipv6" && provinceIP != "both" {
+		return fmt.Errorf("-province-ip only supports ipv4, ipv6, or both")
+	}
+	if attempts < 1 || timeout <= 0 || concurrency < 1 || port < 1 || port > 65535 {
+		return fmt.Errorf("province attempts, timeout, concurrency, and port must be valid")
+	}
+	if strings.TrimSpace(provinceTargets) != "" && provinceRegistry {
+		return fmt.Errorf("-province-target and -province-registry cannot be combined")
+	}
+	provinceSelected := strings.TrimSpace(provinceTargets) != "" || provinceRegistry
+	if !provinceSelected {
+		for name := range visited {
+			active := strings.HasPrefix(name, "province-")
+			switch name {
+			case "province-registry":
+				active = provinceRegistry
+			case "json":
+				active = provinceJSON
+			case "deep":
+				active = deep
+			}
+			if active {
+				return fmt.Errorf("-%s requires -province-target or -province-registry", name)
+			}
+		}
+	}
+	if deep && (visited["province-attempts"] || visited["province-port"]) {
+		return fmt.Errorf("-province-attempts and -province-port are not used with -deep")
+	}
+	return nil
 }
 
 func selectCLIAction(help, version, jsonOutput, deep bool, provinceTargets string, provinceRegistry ...bool) (cliAction, error) {
