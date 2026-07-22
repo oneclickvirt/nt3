@@ -1,6 +1,7 @@
 package nt
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -42,14 +43,14 @@ func (ob *OutputBuffer) Add(line string) {
 func (ob *OutputBuffer) GetAll() []string {
 	ob.mu.Lock()
 	defer ob.mu.Unlock()
-	
+
 	if len(ob.lines) == 0 {
 		return ob.lines
 	}
-	
+
 	result := make([]string, 0, len(ob.lines))
 	lastWasStar := false
-	
+
 	for _, line := range ob.lines {
 		plainText := strings.TrimSpace(stripAnsi(line))
 		if plainText == "*" {
@@ -62,7 +63,7 @@ func (ob *OutputBuffer) GetAll() []string {
 		lastWasStar = false
 		result = append(result, line)
 	}
-	
+
 	return result
 }
 
@@ -110,12 +111,12 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 	var latestIP string
 	tmpMap := make(map[string][]string)
 	hasValidData := false
-	
+
 	for i, v := range hops {
 		if v.RTT > 0 {
 			hasValidData = true
 		}
-		
+
 		if v.Address == nil && latestIP != "" {
 			tmpMap[latestIP] = append(tmpMap[latestIP], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 			continue
@@ -137,7 +138,7 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		}
 		tmpMap[addr] = append(tmpMap[addr], fmt.Sprintf("%-10s", fmt.Sprintf("%.2f ms", v.RTT.Seconds()*1000)))
 	}
-	
+
 	if !hasValidData && latestIP == "" {
 		buffer.mu.Lock()
 		if !buffer.lastPrintedStar {
@@ -148,11 +149,11 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		time.Sleep(3 * time.Second)
 		return
 	}
-	
+
 	buffer.mu.Lock()
 	buffer.lastPrintedStar = false
 	buffer.mu.Unlock()
-	
+
 	for ip, v := range tmpMap {
 		// 处理没有IP但有延迟的情况
 		if ip == "*" {
@@ -162,12 +163,12 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 				line += fmt.Sprintf(Cyan("%-12s "), v[idx])
 				line += fmt.Sprintf(White("%-10s "), "*") // AS号为*
 				line += fmt.Sprintf(White("%-18s "), "*") // Whois为*
-				line += White("*") // 地理位置为*
+				line += White("*")                        // 地理位置为*
 				buffer.Add(line)
 			}
 			continue
 		}
-		
+
 		if len(v) == 0 {
 			continue
 		}
@@ -191,7 +192,7 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		} else {
 			line += fmt.Sprintf(White("%-10s "), "*")
 		}
-		
+
 		// 处理 Whois 信息（IPv4 和 IPv6 都适用）
 		whoisFormat := strings.Split(hop.Geo.Whois, "-")
 		if len(whoisFormat) > 1 {
@@ -210,7 +211,7 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		if displayWhois == "" {
 			displayWhois = "*"
 		}
-		
+
 		// 根据 AS 号或 Whois 信息决定颜色（IPv4 和 IPv6 都适用）
 		switch {
 		case hop.Geo.Asnumber == "58807":
@@ -236,7 +237,7 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 		default:
 			line += fmt.Sprintf(Green("%s "), fmt.Sprintf("%-18s", displayWhois))
 		}
-		
+
 		// 处理地理信息（IPv4 和 IPv6 都适用）
 		var parts []string
 		country := hop.Geo.Country
@@ -261,7 +262,7 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 			// 如果没有地理信息，显示*
 			line += White("*")
 		}
-		
+
 		buffer.Add(line)
 	}
 }
@@ -527,6 +528,13 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 		}
 		return
 	}
+	if apiInfo := prepareNextTraceAPIInfo(); apiInfo != "" {
+		resultChan <- TraceResult{
+			ISPName: "NextTrace API",
+			Output:  []string{apiInfo},
+			Index:   -1,
+		}
+	}
 	pFastTrace := fastTrace.ParamsFastTrace{
 		SrcDev:         "",
 		SrcAddr:        "",
@@ -585,4 +593,29 @@ func TraceRoute(language, location, testType string, resultChan chan<- TraceResu
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
+}
+
+func prepareNextTraceAPIInfo() string {
+	ip := util.GetFastIPCache()
+	if ip == "" {
+		selected, err := util.GetFastIPWithContext(context.Background(), "api.nxtrace.org", "443", false)
+		if err == nil {
+			ip = selected
+		}
+	}
+	meta := util.GetFastIPMetaCache()
+	if meta.IP != "" {
+		ip = meta.IP
+	}
+	if strings.TrimSpace(ip) == "" {
+		return ""
+	}
+	parts := []string{"[NextTrace API] preferred API IP", strings.TrimSpace(ip)}
+	if latency := strings.TrimSpace(meta.Latency); latency != "" {
+		parts = append(parts, latency+"ms")
+	}
+	if node := strings.TrimSpace(meta.NodeName); node != "" {
+		parts = append(parts, node)
+	}
+	return strings.Join(parts, " - ")
 }

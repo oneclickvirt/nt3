@@ -54,13 +54,13 @@ func updateSnapshot(ctx context.Context, client *http.Client, config updateConfi
 	defer cancel()
 	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, config.Source, nil)
 	if err != nil {
-		return fmt.Errorf("create province request: %w", err)
+		return errors.New("create province request: invalid source")
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "oneclickvirt-nt3-province-sync/1")
 	response, err := client.Do(request)
 	if err != nil {
-		return fmt.Errorf("fetch province metadata: %w", err)
+		return sanitizedFetchError("fetch province metadata", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -89,6 +89,17 @@ func updateSnapshot(ctx context.Context, client *http.Client, config updateConfi
 		return err
 	}
 	return replaceSnapshot(config.Output, config.Manifest, candidate)
+}
+
+func sanitizedFetchError(action string, err error) error {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Errorf("%s: request timed out", action)
+	case errors.Is(err, context.Canceled):
+		return fmt.Errorf("%s: request canceled", action)
+	default:
+		return fmt.Errorf("%s: request failed", action)
+	}
 }
 
 type snapshotManifest struct {

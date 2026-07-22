@@ -47,14 +47,40 @@ nt3
 Usage: nt3 [options]
   -c string
         Specify check type (both, ipv4, or ipv6) (default "ipv4")
+  -deep
+        Run Go NTrace routes for the selected province targets
   -h    Show help information
+  -json
+        Print province-mode results as structured JSON
   -l string
         Specify language parameter (en or zh) (default "zh")
   -loc string
         Specify location (supports GZ, BJ, SH, CD, ALL; corresponding to Guangzhou, Beijing, Shanghai, Chengdu and All) (default "GZ")
   -log
         Enable logging
+  -province-attempts int
+        Attempts per province latency target (default 2)
+  -province-concurrency int
+        Maximum concurrent province targets (default 12)
+  -province-ip string
+        Province target IP version: ipv4, ipv6, or both (default "both")
+  -province-port int
+        TCP port used by province latency probes (default 80)
+  -province-registry
+        Load the embedded 31-province, three-carrier dual-stack registry
+  -province-target string
+        Custom targets: code,carrier,ipversion,host; separate targets with semicolons
+  -province-timeout duration
+        Per-attempt or per-route timeout (default 1.5s)
   -v    Show version information
+```
+
+省级延迟示例：
+
+```bash
+nt3 -province-registry -province-ip both
+nt3 -province-registry -province-ip ipv4 -json
+nt3 -province-target 'BJ,ct,ipv4,example.com;SH,cu,ipv6,2001:db8::1' -deep -province-timeout 10s
 ```
 
 ## 卸载
@@ -67,7 +93,7 @@ rm -rf /usr/bin/nt3
 ## 在Golang中使用
 
 ```
-go get github.com/oneclickvirt/nt3@v0.0.14-20260702203359
+go get github.com/oneclickvirt/nt3@v0.0.22
 ```
 
 ## 示例图
