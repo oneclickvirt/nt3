@@ -11,6 +11,7 @@ import (
 
 	fastTrace "github.com/nxtrace/NTrace-core/fast_trace"
 	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/util"
 	"github.com/nxtrace/NTrace-core/wshandle"
@@ -267,6 +268,17 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 	}
 }
 
+// appendTraceStopReason keeps the terminal reason introduced by NTrace-core
+// v1.7.3 visible in nt3's buffered output, which is consumed by goecs.
+func appendTraceStopReason(buffer *OutputBuffer, result *trace.Result) {
+	if buffer == nil || result == nil || result.StopReason == nil {
+		return
+	}
+	if line := printer.FormatTraceStopReason(result.StopReason); line != "" {
+		buffer.Add(line)
+	}
+}
+
 // tracert
 func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []string {
 	defer func() {
@@ -300,7 +312,7 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
 		PacketInterval:   50,
 		TTLInterval:      50,
-		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
+		IPGeoSource:      ipgeo.GetSource(ipgeo.NextTraceAPIProvider),
 		Timeout:          time.Duration(1000) * time.Millisecond,
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
 		PktSize:          52,
@@ -349,6 +361,7 @@ func tracert(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) []st
 			buffer.Add("Warning: No traceroute results")
 		}
 	}
+	appendTraceStopReason(buffer, res)
 	return buffer.GetAll()
 }
 
@@ -385,7 +398,7 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
 		PacketInterval:   50,
 		TTLInterval:      50,
-		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
+		IPGeoSource:      ipgeo.GetSource(ipgeo.NextTraceAPIProvider),
 		Timeout:          time.Duration(1000) * time.Millisecond,
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
 		PktSize:          52,
@@ -434,6 +447,7 @@ func tracert_v6(f fastTrace.FastTracer, ispCollection fastTrace.ISPCollection) [
 			buffer.Add("Warning: No traceroute results")
 		}
 	}
+	appendTraceStopReason(buffer, res)
 	return buffer.GetAll()
 }
 
