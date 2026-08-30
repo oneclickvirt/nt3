@@ -112,16 +112,8 @@ func main() {
 			}
 			continue // 改为continue而不是return
 		}
-		for _, res := range result.Output {
-			res = strings.TrimSpace(res)
-			if res == "" {
-				continue
-			}
-			if strings.Contains(res, "ICMP") {
-				fmt.Print(indentLegacyOutput(res))
-			} else {
-				fmt.Println(indentLegacyOutput(res))
-			}
+		if output := nt.FormatTraceOutput(result.Output); output != "" {
+			fmt.Print(indentLegacyOutput(output))
 		}
 	}
 }

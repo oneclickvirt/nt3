@@ -20,7 +20,7 @@ type ParamsFastTrace struct {
 	DontFragment   bool
 }
 
-var NextTraceVersion = "v0.0.23"
+var NextTraceVersion = "v0.0.24"
 
 var EnableLoger = false
 
