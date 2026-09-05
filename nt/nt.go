@@ -54,6 +54,9 @@ func (ob *OutputBuffer) GetAll() []string {
 
 	for _, line := range ob.lines {
 		plainText := strings.TrimSpace(stripAnsi(line))
+		if isDestinationReachedStopReason(plainText) {
+			continue
+		}
 		if plainText == "*" {
 			if !lastWasStar {
 				result = append(result, line)
@@ -275,7 +278,9 @@ func appendTraceStopReason(buffer *OutputBuffer, result *trace.Result) {
 		return
 	}
 	if line := printer.FormatTraceStopReason(result.StopReason); line != "" {
-		buffer.Add(line)
+		if !isDestinationReachedStopReason(line) {
+			buffer.Add(line)
+		}
 	}
 }
 

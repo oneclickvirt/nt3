@@ -27,6 +27,11 @@ func FormatTraceOutput(lines []string) string {
 		if line == "" {
 			continue
 		}
+		// NTrace-core emits this informational terminal line after the final
+		// hop. It is redundant in the ECS report; keep other stop reasons.
+		if isDestinationReachedStopReason(line) {
+			continue
+		}
 		output.WriteString(line)
 		next, ok := nextTraceLine(lines, index)
 		if !(IsTraceHeader(line) && ok && isTraceBody(next)) {
@@ -34,6 +39,11 @@ func FormatTraceOutput(lines []string) string {
 		}
 	}
 	return output.String()
+}
+
+func isDestinationReachedStopReason(line string) bool {
+	plain := strings.ToLower(strings.TrimSpace(stripAnsi(line)))
+	return strings.HasPrefix(plain, "trace stopped: destination reached at hop ")
 }
 
 func nextTraceLine(lines []string, index int) (string, bool) {

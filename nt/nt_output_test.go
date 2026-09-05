@@ -45,15 +45,21 @@ func TestFormatTraceOutputSeparatesStopReasonAndNextHeader(t *testing.T) {
 	}
 
 	got := FormatTraceOutput(lines)
-	if !strings.Contains(got, "ICMP Echo Reply)\n") {
-		t.Fatalf("stop reason was not terminated: %q", got)
-	}
-	if strings.Contains(got, "ICMP Echo Reply)广州移动") {
-		t.Fatalf("next carrier header was concatenated: %q", got)
+	if strings.Contains(got, "Trace Stopped: Destination Reached") {
+		t.Fatalf("destination-reached stop reason was displayed: %q", got)
 	}
 	wantSuffix := "广州移动 - ICMP v4 -\x1b[0mtraceroute to 120.196.165.24, 30 hops max, 52 byte packets\n"
 	if !strings.Contains(got, wantSuffix) {
 		t.Fatalf("header and traceroute body were not joined: %q", got)
+	}
+}
+
+func TestFormatTraceOutputKeepsOtherStopReasons(t *testing.T) {
+	got := FormatTraceOutput([]string{
+		"Trace Stopped: No Continuing Route Observed at Hop 4 (ICMP Host Unreachable (!H))",
+	})
+	if !strings.Contains(got, "No Continuing Route Observed") {
+		t.Fatalf("non-terminal stop reason was filtered: %q", got)
 	}
 }
 
