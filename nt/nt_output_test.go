@@ -54,6 +54,23 @@ func TestFormatTraceOutputSeparatesStopReasonAndNextHeader(t *testing.T) {
 	}
 }
 
+func TestFormatTraceOutputFiltersMaximumHopsReachedAndKeepsNextHeader(t *testing.T) {
+	lines := []string{
+		"Trace Stopped: Maximum Hops Reached at Hop 30 (No Destination Response)",
+		"\x1b[33m\x1b[01m广州电信 - ICMP v6 -\x1b[0m",
+		"traceroute to 240e:e1:aa00:4000::24, 30 hops max, 52 byte packets",
+	}
+
+	got := FormatTraceOutput(lines)
+	if strings.Contains(got, "Maximum Hops Reached") {
+		t.Fatalf("maximum-hops stop reason was displayed: %q", got)
+	}
+	want := "\x1b[33m\x1b[01m广州电信 - ICMP v6 -\x1b[0mtraceroute to 240e:e1:aa00:4000::24, 30 hops max, 52 byte packets\n"
+	if got != want {
+		t.Fatalf("formatted output = %q, want %q", got, want)
+	}
+}
+
 func TestFormatTraceOutputKeepsOtherStopReasons(t *testing.T) {
 	got := FormatTraceOutput([]string{
 		"Trace Stopped: No Continuing Route Observed at Hop 4 (ICMP Host Unreachable (!H))",

@@ -54,7 +54,7 @@ func (ob *OutputBuffer) GetAll() []string {
 
 	for _, line := range ob.lines {
 		plainText := strings.TrimSpace(stripAnsi(line))
-		if isDestinationReachedStopReason(plainText) {
+		if isInformationalTerminalStopReason(plainText) {
 			continue
 		}
 		if plainText == "*" {
@@ -271,14 +271,15 @@ func realtimePrinterWithBuffer(res *trace.Result, ttl int, buffer *OutputBuffer)
 	}
 }
 
-// appendTraceStopReason keeps the terminal reason introduced by NTrace-core
-// v1.7.3 visible in nt3's buffered output, which is consumed by goecs.
+// appendTraceStopReason keeps diagnostic stop reasons introduced by
+// NTrace-core v1.7.3 visible in nt3's buffered output. Normal completed-route
+// markers are intentionally omitted before callers such as GoECS receive them.
 func appendTraceStopReason(buffer *OutputBuffer, result *trace.Result) {
 	if buffer == nil || result == nil || result.StopReason == nil {
 		return
 	}
 	if line := printer.FormatTraceStopReason(result.StopReason); line != "" {
-		if !isDestinationReachedStopReason(line) {
+		if !isInformationalTerminalStopReason(line) {
 			buffer.Add(line)
 		}
 	}
