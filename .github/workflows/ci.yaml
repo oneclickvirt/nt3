@@ -1,67 +1,63 @@
 name: CI
-
-on:
-  workflow_dispatch:
-
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   test:
     strategy:
       matrix:
-        go: ['1.22.x']
-        os: [ubuntu-latest]
+        go:
+        - 1.22.x
+        os:
+        - ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          check-latest: true
-
-      - name: Test
-        run: |
-          # 检查是否有测试文件
-          if find . -name "*_test.go" -type f | grep -q .; then
-            go test ./... -coverprofile=coverage.txt
-          else
-            echo "No test files found, skipping tests"
-            go build -v ./...
-          fi
-
-      - name: Create Tag
-        if: success() # 仅在测试成功时运行
-        run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@github.com'
-          VERSION="$(go run ./cmd -v | tail -n 1 | tr -d '\r')"
-          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid component version: $VERSION" >&2
-            exit 1
-          fi
-          TAG="${VERSION}-$(date +'%Y%m%d%H%M%S')"
-          git tag $TAG
-          git push origin $TAG
-          echo "TAG=$TAG" >> $GITHUB_ENV
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update README.md
-        if: success()
-        run: |
-          sed -i "s|go get github.com/oneclickvirt/nt3@.*|go get github.com/oneclickvirt/nt3@${TAG}|" README.md
-        env:
-          TAG: ${{ env.TAG }}
-
-      - name: Commit and Push README.md
-        if: success()
-        run: |
-          git add README.md
-          git commit -m "Update README.md with new tag ${TAG}"
-          git push origin main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Setup Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
+        check-latest: true
+    - name: Test
+      run: |
+        # 检查是否有测试文件
+        if find . -name "*_test.go" -type f | grep -q .; then
+          go test ./... -coverprofile=coverage.txt
+        else
+          echo "No test files found, skipping tests"
+          go build -v ./...
+        fi
+    - name: Create Tag
+      if: success()
+      run: |
+        git config --global user.name 'github-actions'
+        git config --global user.email 'github-actions@github.com'
+        VERSION="$(go run ./cmd -v | tail -n 1 | tr -d '\r')"
+        if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Invalid component version: $VERSION" >&2
+          exit 1
+        fi
+        TAG="${VERSION}-$(date +'%Y%m%d%H%M%S')"
+        git tag $TAG
+        git push origin $TAG
+        echo "TAG=$TAG" >> $GITHUB_ENV
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Update README.md
+      if: success()
+      run: |
+        sed -i "s|go get github.com/oneclickvirt/nt3@.*|go get github.com/oneclickvirt/nt3@${TAG}|" README.md
+      env:
+        TAG: ${{ env.TAG }}
+    - name: Commit and Push README.md
+      if: success()
+      run: |
+        git add README.md
+        git commit -m "Update README.md with new tag ${TAG}"
+        git push origin main
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      GOPROXY: https://proxy.golang.org|direct
+'on':
+  workflow_dispatch: null

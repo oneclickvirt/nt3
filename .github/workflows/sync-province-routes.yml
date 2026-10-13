@@ -1,79 +1,77 @@
 name: Sync province route registry
-
-on:
-  schedule:
-    - cron: "43 3 * * *"
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/sync-province-routes.yml"
-      - "cmd/update-province-routes/**"
-      - "model/snapshot/**"
-      - "model/model.go"
-      - "model/province.go"
-      - "model/province_registry.go"
-      - "model/province_registry_test.go"
-      - "model/province_test.go"
-      - "nt/province_latency.go"
-      - "nt/province_latency_test.go"
-      - "go.mod"
-      - "go.sum"
-
 permissions:
   contents: write
-
 concurrency:
   group: nt3-province-route-sync
   cancel-in-progress: false
-
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: Update embedded province routes
-        shell: bash
-        run: |
-          set -euo pipefail
-          go run ./cmd/update-province-routes -output model/snapshot/province-routes.json -manifest model/snapshot/manifest.json
-      - name: Test snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          test_log="$(mktemp)"
-          trap 'rm -f "$test_log"' EXIT
-          if ! go test -race -count=1 ./... 2>&1 | tee "$test_log"; then
-            message="$(tail -n 120 "$test_log")"
-            message="${message//'%'/'%25'}"
-            message="${message//$'\r'/'%0D'}"
-            message="${message//$'\n'/'%0A'}"
-            echo "::error title=Go race tests failed::${message}"
-            exit 1
-          fi
-      - name: Vet snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          go vet ./...
-      - name: Check snapshot diff
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --check
-      - name: Commit semantic changes
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -z "$(git status --porcelain -- model/snapshot/province-routes.json model/snapshot/manifest.json)" ]]; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add model/snapshot/province-routes.json model/snapshot/manifest.json
-          git commit -m "chore: sync province route registry"
-          git push
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
+    - name: Update embedded province routes
+      shell: bash
+      run: |
+        set -euo pipefail
+        go run ./cmd/update-province-routes -output model/snapshot/province-routes.json -manifest model/snapshot/manifest.json
+    - name: Test snapshot
+      shell: bash
+      run: |
+        set -euo pipefail
+        test_log="$(mktemp)"
+        trap 'rm -f "$test_log"' EXIT
+        if ! go test -race -count=1 ./... 2>&1 | tee "$test_log"; then
+          message="$(tail -n 120 "$test_log")"
+          message="${message//'%'/'%25'}"
+          message="${message//$'\r'/'%0D'}"
+          message="${message//$'\n'/'%0A'}"
+          echo "::error title=Go race tests failed::${message}"
+          exit 1
+        fi
+    - name: Vet snapshot
+      shell: bash
+      run: |
+        set -euo pipefail
+        go vet ./...
+    - name: Check snapshot diff
+      shell: bash
+      run: |
+        set -euo pipefail
+        git diff --check
+    - name: Commit semantic changes
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ -z "$(git status --porcelain -- model/snapshot/province-routes.json model/snapshot/manifest.json)" ]]; then
+          exit 0
+        fi
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add model/snapshot/province-routes.json model/snapshot/manifest.json
+        git commit -m "chore: sync province route registry"
+        git push
+    env:
+      GOPROXY: https://proxy.golang.org|direct
+'on':
+  schedule:
+  - cron: 43 3 * * *
+  workflow_dispatch: null
+  push:
+    branches:
+    - main
+    paths:
+    - .github/workflows/sync-province-routes.yml
+    - cmd/update-province-routes/**
+    - model/snapshot/**
+    - model/model.go
+    - model/province.go
+    - model/province_registry.go
+    - model/province_registry_test.go
+    - model/province_test.go
+    - nt/province_latency.go
+    - nt/province_latency_test.go
+    - go.mod
+    - go.sum
