@@ -109,7 +109,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       shell: bash
     concurrency:
-      group: release-assets-${{ github.repository }}-linux-${{ matrix.goarch }}
+      group: release-assets-${{ github.repository }}-${{ matrix.goos }}-${{ matrix.goarch }}
       cancel-in-progress: false
   release-darwin:
     name: Release Go Binary (Darwin)
@@ -160,7 +160,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       shell: bash
     concurrency:
-      group: release-assets-${{ github.repository }}-linux-${{ matrix.goarch }}
+      group: release-assets-${{ github.repository }}-darwin-${{ matrix.goarch }}
       cancel-in-progress: false
 'on':
   workflow_dispatch: null
